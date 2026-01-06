@@ -24,8 +24,8 @@ target_link_libraries(ai_interview_cpp PRIVATE
 )
 
 # Указываем, куда положить скомпилированный файл (.so / .pyd)
-# Положим его прямо в корень backend/services или backend/, чтобы Python его видел
+# Положим его прямо в корень backend/services или libs/, чтобы Python его видел
 # Пока положим в корень проекта для теста
 set_target_properties(ai_interview_cpp PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/backend"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/libs"
 )
