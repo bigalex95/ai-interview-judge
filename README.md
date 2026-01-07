@@ -4,10 +4,12 @@ An end-to-end multimodal AI system designed to automatically evaluate technical 
 
 ## 🚀 Key Features
 
-- **High-Performance Video Processing (C++):** A custom C++ engine using OpenCV and robust edge detection (Canny/Morphology) to identify slide transitions and keyframes, filtering out webcam noise.
-- **Multimodal Analysis:** Synchronizes visual data (slides) with audio transcripts (Whisper) to understand _what_ is shown vs. _what_ is said.
-- **AI Judging:** Uses Large Language Models (LLMs) to evaluate the relevance and accuracy of the speaker's answers based on the visual context.
-- **Hybrid Architecture:** Implements computationally heavy tasks in C++ bound to a Python backend via `pybind11`.
+- **High-Performance Video Processing (C++):** A custom C++ engine using OpenCV and robust edge detection (Canny/Morphology) to identify slide transitions and keyframes, filtering out webcam noise
+- **Multimodal Analysis:** Synchronizes visual data (slides) with audio transcripts (Whisper) to understand _what_ is shown vs. _what_ is said (coming soon)
+- **AI Judging:** Uses Large Language Models (LLMs) to evaluate the relevance and accuracy of the speaker's answers based on the visual context (coming soon)
+- **Hybrid Architecture:** Implements computationally heavy tasks in C++ bound to a Python backend via `pybind11`
+- **RESTful API:** FastAPI-based backend for easy integration
+- **Modular Design:** Clean separation of concerns with service layer architecture
 
 ## 🛠️ Tech Stack
 

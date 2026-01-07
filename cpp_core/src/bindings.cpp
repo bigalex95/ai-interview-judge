@@ -1,13 +1,13 @@
 #include <pybind11/pybind11.h>
-#include <pybind11/stl.h>   // Для автоматической конвертации std::vector
-#include <pybind11/numpy.h> // Для работы с numpy массивами
+#include <pybind11/stl.h>   // For automatic std::vector conversion
+#include <pybind11/numpy.h> // For working with numpy arrays
 #include "ai_interview/slide_detector.hpp"
 
 namespace py = pybind11;
 
-// --- Вспомогательная функция для конвертации cv::Mat -> numpy array ---
-// OpenCV хранит данные в BGR, Python обычно хочет RGB или тоже BGR.
-// Мы вернем "как есть", Python сам разберется.
+// --- Helper function for converting cv::Mat -> numpy array ---
+// OpenCV stores data in BGR, Python usually wants RGB or also BGR.
+// We return "as is", Python will figure it out.
 py::array_t<uint8_t> mat_to_numpy(const cv::Mat &mat)
 {
     if (mat.empty())
@@ -15,7 +15,7 @@ py::array_t<uint8_t> mat_to_numpy(const cv::Mat &mat)
         return py::array_t<uint8_t>();
     }
 
-    // Определяем форму массива (height, width, channels)
+    // Define array shape (height, width, channels)
     std::vector<ssize_t> shape = {mat.rows, mat.cols};
     std::vector<ssize_t> strides = {mat.step[0], mat.step[1]};
 
@@ -25,17 +25,17 @@ py::array_t<uint8_t> mat_to_numpy(const cv::Mat &mat)
         strides.push_back(mat.elemSize1());
     }
 
-    // Создаем numpy array, который ссылается на данные Mat или копирует их
-    // В данном случае безопаснее скопировать данные, чтобы Python владел памятью
+    // Create numpy array that references Mat data or copies it
+    // In this case it's safer to copy the data so Python owns the memory
     return py::array_t<uint8_t>(shape, strides, mat.data).attr("copy")();
 }
 
-// --- Определение модуля ---
+// --- Module definition ---
 PYBIND11_MODULE(ai_interview_cpp, m)
 {
     m.doc() = "C++ backend for AI Interview Judge video processing";
 
-    // 1. Биндим структуру SlideSegment
+    // 1. Bind SlideSegment structure
     py::class_<ai_interview::SlideSegment>(m, "SlideSegment")
         .def_readwrite("frame_index", &ai_interview::SlideSegment::frame_index)
         .def_readwrite("timestamp_sec", &ai_interview::SlideSegment::timestamp_sec)
@@ -44,7 +44,7 @@ PYBIND11_MODULE(ai_interview_cpp, m)
              { return "<SlideSegment frame=" + std::to_string(s.frame_index) +
                       " time=" + std::to_string(s.timestamp_sec) + ">"; });
 
-    // 2. Биндим класс SlideDetector
+    // 2. Bind SlideDetector class
     py::class_<ai_interview::SlideDetector>(m, "SlideDetector")
         .def(py::init<double, double>(),
              py::arg("min_scene_duration_sec") = 2.0,
@@ -53,7 +53,7 @@ PYBIND11_MODULE(ai_interview_cpp, m)
              "Scans video for slide transitions")
         .def("get_frame", [](ai_interview::SlideDetector &self, const std::string &path, int idx)
              {
-            // Кастомная обертка для конвертации Mat -> Numpy
+            // Custom wrapper for converting Mat -> Numpy
             cv::Mat frame = self.get_frame(path, idx);
             return mat_to_numpy(frame); }, "Get specific video frame as numpy array");
 }

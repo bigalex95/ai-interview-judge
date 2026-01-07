@@ -1,10 +1,11 @@
-# 1. Создаем папку для сборки
-mkdir build
+#!/bin/bash
+# 1. Create build directory
+mkdir -p build
 cd build
 
-# 2. Генерируем Makefile через CMake
-# CMake скачает pybind11, найдет Python и OpenCV.
+# 2. Generate Makefile via CMake
+# CMake will download pybind11, find Python and OpenCV.
 cmake ..
 
-# 3. Компилируем (используем все ядра процессора -j)
+# 3. Compile (use all CPU cores with -j)
 make -j$(nproc)
