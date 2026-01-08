@@ -6,9 +6,16 @@ readme = "README.md"
 requires-python = ">=3.10,<3.14"
 dependencies = [
     "fastapi>=0.128.0",
-    "numpy>=1.21.0",
-    "opencv-python>=4.11.0.86",
+    "numpy>=1.21.0,<2.0.0",
+    "opencv-contrib-python>=4.11.0.86",
     "uvicorn>=0.40.0",
+    # --- New ML Dependencies ---
+    "faster-whisper>=1.0.0", # ASR (Audio-to-Text) - more efficient than openai-whisper
+    "paddlepaddle>=2.6.0", # Движок для OCR (CPU version)
+    "paddleocr>=2.7.0", # Сам OCR
+    "moviepy>=1.0.3,<2.0.0", # Для работы с аудиодорожками
+    "setuptools>=68.0.0", # Часто нужен для сборки старых пакетов
+    "python-multipart>=0.0.21",
 ]
 
 [dependency-groups]

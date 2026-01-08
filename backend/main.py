@@ -7,12 +7,20 @@ Provides endpoints for video processing, slide detection, and interview evaluati
 Author: bigalex95
 """
 
-from fastapi import FastAPI, HTTPException, UploadFile, File
-from fastapi.responses import JSONResponse
-from typing import List, Optional
-import uvicorn
-from pathlib import Path
+import os
+
+# Fix for OpenMP conflict (common in PyTorch/Paddle + FastAPI)
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
 import logging
+import shutil
+from pathlib import Path
+
+import uvicorn
+from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.responses import JSONResponse
+
+from backend.services.analysis_service import AnalysisService
 
 # Configure logging
 logging.basicConfig(
@@ -29,20 +37,27 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
+# Global singleton for heavy models
+analysis_service: AnalysisService | None = None
+
+
+@app.on_event("startup")
+def startup_event():
+    global analysis_service
+    logger.info("Initializing ML Models...")
+    analysis_service = AnalysisService()
+    logger.info("ML Models Ready.")
+
 
 @app.get("/")
 async def root():
-    """
-    Root endpoint - API health check and info.
-
-    Returns:
-        JSON response with API status and version info
-    """
+    """Root endpoint - API health check and info."""
     return {
-        "status": "online",
+        "status": "AI Judge is running",
         "service": "AI Interview Judge API",
         "version": "0.1.0",
         "docs": "/docs",
+        "models_loaded": analysis_service is not None,
     }
 
 
@@ -55,6 +70,35 @@ async def health_check():
         JSON response with health status
     """
     return {"status": "healthy", "service": "ai-interview-judge"}
+
+
+@app.post("/analyze")
+async def analyze_video_endpoint(file: UploadFile = File(...)):
+    """Upload a video file and get multimodal analysis (text + audio)."""
+    temp_dir = Path("temp_uploads")
+    temp_dir.mkdir(exist_ok=True)
+
+    file_path = temp_dir / file.filename
+
+    try:
+        with file_path.open("wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Could not save file: {exc}")
+
+    try:
+        if analysis_service is None:
+            raise RuntimeError("Analysis service not initialized")
+
+        result = analysis_service.analyze_content(str(file_path))
+        return result
+    except Exception as exc:
+        logger.error("Analysis failed: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+    finally:
+        # Optionally delete uploaded file after processing
+        # file_path.unlink(missing_ok=True)
+        pass
 
 
 @app.post("/api/v1/process-video")
