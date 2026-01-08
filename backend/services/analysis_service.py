@@ -6,6 +6,7 @@ from typing import Any, Dict, List
 
 from backend.services.audio_service import AudioService
 from backend.services.video_service import SlideDetectionService
+from backend.services.llm_service import LLMJudgeService
 
 # ВАЖНО: НЕ импортируем OcrService здесь на верхнем уровне,
 # чтобы не спровоцировать загрузку Paddle в основном процессе.
@@ -96,6 +97,7 @@ class AnalysisService:
         self.video_service = SlideDetectionService(
             min_scene_duration=2.0, min_area_ratio=0.15
         )
+        self.llm_service = LLMJudgeService()
 
     def analyze_content(self, video_path: str) -> Dict[str, Any]:
         path = Path(video_path)
@@ -143,8 +145,8 @@ class AnalysisService:
                     _ocr_worker_task, (video_path, detected_slides, detected_language)
                 )
 
-        # --- Phase 4: Assembly ---
-        return {
+        # Собираем сырые данные
+        analysis_result = {
             "meta": {
                 "video_path": str(video_path),
                 "status": "completed",
@@ -153,3 +155,13 @@ class AnalysisService:
             "transcription": transcript,
             "visual_context": visual_data,
         }
+
+        # --- [NEW] Phase 4: LLM Evaluation ---
+        logger.info("🧠 Phase 4: LLM Evaluation...")
+        # Передаем собранные данные (текст + слайды) в Gemini
+        ai_feedback = self.llm_service.evaluate_interview(analysis_result)
+
+        # Добавляем оценку в финальный ответ
+        analysis_result["ai_evaluation"] = ai_feedback
+
+        return analysis_result
