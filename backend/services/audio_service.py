@@ -38,6 +38,13 @@ class AudioService:
         try:
             logger.info(f"Extracting audio from {video_path}...")
             video = VideoFileClip(video_path)
+
+            # Check if video has an audio track
+            if video.audio is None:
+                video.close()
+                logger.error(f"Video file has no audio track: {video_path}")
+                raise RuntimeError("Video file has no audio track")
+
             # Извлекаем аудио (bitrate 128k достаточно для речи)
             video.audio.write_audiofile(
                 audio_path, bitrate="128k", verbose=False, logger=None
@@ -48,15 +55,21 @@ class AudioService:
             logger.error(f"Audio extraction failed: {e}")
             raise RuntimeError("FFmpeg extraction failed") from e
 
-    def transcribe(self, audio_path: str) -> List[Dict[str, Any]]:
+    def transcribe(self, audio_path: str) -> tuple[List[Dict[str, Any]], str]:
         """
         Transcribes audio file.
-        Returns list of segments: {'start': 0.0, 'end': 4.0, 'text': 'Hello world'}
+        Returns tuple: (segments, detected_language)
+        - segments: List of segments: {'start': 0.0, 'end': 4.0, 'text': 'Hello world'}
+        - detected_language: ISO 639-1 language code (e.g., 'en', 'es', 'fr')
         """
         try:
             logger.info(f"Starting transcription for {audio_path}...")
-            # faster-whisper returns generator of segments
+            # faster-whisper returns generator of segments and info object
             segments, info = self.model.transcribe(audio_path, beam_size=5)
+
+            # Extract detected language from info object
+            detected_language = info.language if hasattr(info, "language") else "en"
+            logger.info(f"Detected language: {detected_language}")
 
             # Convert generator to list of dicts matching original format
             result_segments = []
@@ -65,7 +78,7 @@ class AudioService:
                     {"start": segment.start, "end": segment.end, "text": segment.text}
                 )
 
-            return result_segments
+            return result_segments, detected_language
         except Exception as e:
             logger.error(f"Whisper transcription failed: {e}")
             raise RuntimeError("Transcription failed") from e

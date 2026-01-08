@@ -1,19 +1,56 @@
 import logging
-import os
-
-# Fix for OpenMP conflict (common in PyTorch/Paddle + FastAPI)
-os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-
-# --- FIX: Отключаем MKLDNN для предотвращения конфликта OneDNN ---
-os.environ["FLAGS_use_mkldnn"] = "0"
-os.environ["FLAGS_enable_mkldnn"] = "0"
-# -----------------------------------------------------------------
-
 import cv2
 import numpy as np
-from paddleocr import PaddleOCR
+import os
+
+# Удаляем глобальный импорт paddleocr, чтобы не грузить либы раньше времени
+# from paddleocr import PaddleOCR
 
 logger = logging.getLogger(__name__)
+
+
+def map_language_code(whisper_lang: str) -> str:
+    """
+    Map Whisper/ISO 639-1 language codes to PaddleOCR language format.
+
+    Args:
+        whisper_lang: ISO 639-1 language code from Whisper (e.g., 'en', 'es', 'fr')
+
+    Returns:
+        PaddleOCR language code (e.g., 'en', 'es', 'french', 'german')
+
+    Note: PaddleOCR uses inconsistent naming - some are ISO codes, others are full names.
+    See: https://github.com/PaddlePaddle/PaddleOCR/blob/release/2.7/doc/doc_en/multi_languages_en.md
+    """
+    # Mapping from Whisper ISO 639-1 codes to PaddleOCR language names
+    language_map = {
+        "en": "en",  # English
+        "zh": "ch",  # Chinese (Simplified)
+        "es": "es",  # Spanish
+        "fr": "french",  # French
+        "de": "german",  # German
+        "ja": "japan",  # Japanese
+        "ko": "korean",  # Korean
+        "ru": "ru",  # Russian
+        "ar": "ar",  # Arabic
+        "hi": "hi",  # Hindi
+        "pt": "pt",  # Portuguese
+        "it": "it",  # Italian
+        "nl": "dutch",  # Dutch
+        "pl": "pl",  # Polish
+        "tr": "tr",  # Turkish
+        "vi": "vi",  # Vietnamese
+        "th": "th",  # Thai
+        "sv": "sv",  # Swedish
+        "da": "da",  # Danish
+        "no": "no",  # Norwegian
+        "fi": "fi",  # Finnish
+    }
+
+    paddle_lang = language_map.get(whisper_lang, "en")
+    if paddle_lang != whisper_lang:
+        logger.info(f"Mapped language: {whisper_lang} -> {paddle_lang}")
+    return paddle_lang
 
 
 class OcrService:
@@ -21,80 +58,73 @@ class OcrService:
     Service for extracting text from images using PaddleOCR.
     """
 
-    def __init__(self, lang: str = "ru"):
+    def __init__(self, lang: str = "en"):
         """Initialize PaddleOCR model.
 
         Args:
-            lang: Language code ('en', 'ru', 'ch', etc.)
+            lang: Language code (ISO 639-1 from Whisper or PaddleOCR format)
         """
-        logger.info(f"Loading PaddleOCR model (lang={lang})...")
+        # Map language code to PaddleOCR format
+        paddle_lang = map_language_code(lang)
+
+        logger.info(f"Loading PaddleOCR model (lang={paddle_lang})...")
         try:
-            # Инициализация модели (Heavy operation!)
-            # use_angle_cls=True позволяет читать перевернутый текст
-            # Note: use_angle_cls is deprecated, using use_textline_orientation=True if possible,
-            # but keeping compat. PaddleOCR constructor handles kwarg mapping usually.
+            # --- LAZY IMPORT (CRITICAL FIX) ---
+            # Импортируем только здесь, чтобы этот код исполнялся ТОЛЬКО в воркере
+            from paddleocr import PaddleOCR
+
+            # use_angle_cls=False ускоряет и уменьшает шанс ошибок
             self.ocr = PaddleOCR(
                 use_angle_cls=False,
-                lang=lang,
+                lang=paddle_lang,
+                show_log=False,  # Убираем шум в консоли
             )
-            logger.info("PaddleOCR model loaded successfully.")
+            logger.info(
+                f"PaddleOCR model loaded successfully with language={paddle_lang}."
+            )
         except Exception as e:
-            logger.error(f"Failed to load PaddleOCR: {e}")
-            raise RuntimeError("OCR Model initialization failed") from e
+            logger.error(f"Failed to load PaddleOCR with lang={paddle_lang}: {e}")
+            logger.warning("Falling back to English (en)...")
+            # Fallback to English if the specified language fails
+            try:
+                from paddleocr import PaddleOCR
+
+                self.ocr = PaddleOCR(use_angle_cls=False, lang="en", show_log=False)
+                logger.info("PaddleOCR loaded with fallback language: en")
+            except Exception as fallback_error:
+                logger.error(f"Fallback to English also failed: {fallback_error}")
+                raise RuntimeError("OCR Model initialization failed") from e
 
     def extract_text(self, frame: np.ndarray) -> str:
-        """
-        Extract text from a single video frame.
-
-        Returns:
-            Combined string of all detected text lines.
-        """
+        """Extract text from a single video frame."""
         if frame is None or frame.size == 0:
             return ""
 
         try:
-            # Convert BGR (OpenCV) to RGB (PaddleOCR expects RGB)
+            # Paddle ожидает RGB
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            # Ensure uint8 type
-            frame_rgb = frame_rgb.astype(np.uint8)
 
-            if not frame_rgb.flags["C_CONTIGUOUS"]:
-                frame_rgb = np.ascontiguousarray(frame_rgb)
-
-            # Debug logs for troubleshooting
-            # logger.info(f"Frame processing: shape={frame_rgb.shape}, dtype={frame_rgb.dtype}, contiguous={frame_rgb.flags['C_CONTIGUOUS']}")
-
-            # result structure: [ [ [points], (text, confidence) ], ... ]
+            # Инференс
             result = self.ocr.ocr(frame_rgb, cls=False)
 
             if not result or result[0] is None:
                 return ""
 
-            # Собираем весь текст в одну строку
+            # Сборка текста
             extracted_lines = []
 
-            # Handle new PaddleOCR output format (dict)
-            if isinstance(result[0], dict):
-                data = result[0]
-                texts = data.get("rec_texts", [])
-                scores = data.get("rec_scores", [])
-                for text, score in zip(texts, scores):
-                    if score > 0.6:
-                        extracted_lines.append(text)
-            # Handle standard PaddleOCR output format (list of lists)
-            elif isinstance(result[0], list):
-                for line in result[0]:
-                    if isinstance(line, list) and len(line) >= 2:
-                        text = line[1][0]
-                        confidence = line[1][1]
-
-                        # Фильтруем мусор с низкой уверенностью
-                        if confidence > 0.6:
+            # Обработка разных форматов ответа Paddle
+            lines = result[0]
+            if isinstance(lines, list):
+                for line in lines:
+                    # line format: [[points], [text, score]]
+                    if len(line) >= 2 and isinstance(line[1], (list, tuple)):
+                        text, score = line[1]
+                        if score > 0.6:
                             extracted_lines.append(text)
 
-            full_text = " ".join(extracted_lines)
-            return full_text
+            return " ".join(extracted_lines)
 
         except Exception as e:
-            logger.error(f"OCR Inference error: {type(e).__name__}: {e}")
+            logger.error(f"OCR Inference error: {e}")
             return ""

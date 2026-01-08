@@ -1,113 +1,88 @@
 import logging
 import multiprocessing
-import re
-from collections import Counter
-from difflib import SequenceMatcher
-from pathlib import Path
-from typing import Any, Dict, List, Set
-
 import cv2
+from pathlib import Path
+from typing import Any, Dict, List
 
 from backend.services.audio_service import AudioService
+from backend.services.video_service import SlideDetectionService
 
-# Note: OcrService is NOT imported here to avoid library conflicts (OpenMP/MKL) with Torch/Whisper
-# from backend.services.ocr_service import OcrService
+# ВАЖНО: НЕ импортируем OcrService здесь на верхнем уровне,
+# чтобы не спровоцировать загрузку Paddle в основном процессе.
 
 logger = logging.getLogger(__name__)
 
 
-def is_similar(a: str, b: str, threshold: float = 0.85) -> bool:
+def _ocr_worker_task(
+    video_path: str, slides_metadata: List[Dict], language: str = "en"
+) -> List[Dict]:
     """
-    Проверяет, похожи ли две строки (Fuzzy Matching).
-    """
-    return SequenceMatcher(None, a, b).ratio() > threshold
+    Эта функция запускается в ОТДЕЛЬНОМ процессе.
+    Здесь безопасно грузить PaddleOCR, так как Torch здесь нет.
 
-
-def clean_generic_noise(text: str) -> str:
-    """
-    Базовая очистка: убирает только явный мусор (одиночные символы, странные знаки),
-    но НЕ удаляет слова, основываясь на их смысле.
-    """
-    # Оставляем только буквы, цифры и базовую пунктуацию
-    # Если слово состоит из 1 буквы и это не 'я', 'a' (англ) или цифра - убираем
-    words = text.split()
-    cleaned_words = []
-
-    for w in words:
-        # Убираем лишние символы по краям
-        w_clean = w.strip(".,!?:;\"'|-«»")
-
-        if not w_clean:
-            continue
-
-        # Фильтр совсем короткого мусора (одиночные согласные, случайные символы OCR)
-        if (
-            len(w_clean) < 2
-            and not w_clean.isdigit()
-            and w_clean.lower() not in ["я", "a", "i", "y", "v"]
-        ):
-            continue
-
-        cleaned_words.append(w)
-
-    return " ".join(cleaned_words)
-
-
-def run_ocr_isolated(
-    video_path: str, interval_sec: float = 2.0
-) -> List[Dict[str, Any]]:
-    """
-    Запускает OCR в отдельном процессе. Возвращает "сырые" данные,
-    которые потом будут очищены статистически.
+    Args:
+        video_path: Path to the video file
+        slides_metadata: List of detected slides with frame_index and timestamp
+        language: ISO 639-1 language code detected from audio (e.g., 'en', 'es', 'fr')
     """
     import logging
-    import cv2
-    from backend.services.ocr_service import OcrService
 
+    # Настраиваем логи для дочернего процесса
     logging.basicConfig(level=logging.INFO)
-    logger = logging.getLogger("OCR_Worker")
+    worker_logger = logging.getLogger("OCR_Worker")
+
+    worker_logger.info(
+        f"Worker started. Processing {len(slides_metadata)} slides with language={language}..."
+    )
+
+    results = []
+    cap = None
 
     try:
-        ocr_service = OcrService(lang="ru")
+        # --- FIX: Запрещаем Paddle перехватывать системные сигналы (SIGTERM) ---
+        import paddle
+
+        paddle.disable_signal_handler()
+        # -----------------------------------------------------------------------
+
+        # 1. Lazy Import внутри процесса
+        from backend.services.ocr_service import OcrService
+
+        ocr_service = OcrService(lang=language)
+
+        # 2. Открываем видео (OpenCV безопасен в мультипроцессинге)
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            worker_logger.error("Failed to open video in worker")
+            return []
+
+        # 3. Пробегаем по списку найденных слайдов
+        for slide in slides_metadata:
+            frame_idx = slide["frame_index"]
+            timestamp = slide["timestamp_sec"]
+
+            # Прыгаем к кадру
+            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+            ret, frame = cap.read()
+
+            if ret:
+                text = ocr_service.extract_text(frame)
+                if text and len(text.strip()) > 3:
+                    results.append(
+                        {
+                            "timestamp": timestamp,
+                            "frame_index": frame_idx,
+                            "ocr_text": text,
+                        }
+                    )
     except Exception as e:
-        logger.error(f"Failed to init OCR in worker: {e}")
-        return []
-
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        return []
-
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    frame_interval = max(int(fps * interval_sec), 1)
-
-    raw_slides: List[Dict[str, Any]] = []
-    frame_count = 0
-
-    try:
-        while True:
-            success, frame = cap.read()
-            if not success:
-                break
-
-            if frame_count % frame_interval == 0:
-                timestamp = frame_count / fps if fps else 0.0
-                try:
-                    raw_text = ocr_service.extract_text(frame)
-                    # Делаем только базовую очистку мусора
-                    text = clean_generic_noise(raw_text)
-
-                    if len(text) > 3:  # Если что-то осмысленное осталось
-                        raw_slides.append(
-                            {"timestamp": round(timestamp, 2), "text": text}
-                        )
-                except Exception as e:
-                    pass
-
-            frame_count += 1
+        worker_logger.error(f"Worker crashed: {e}")
     finally:
-        cap.release()
+        if cap:
+            cap.release()
 
-    return raw_slides
+    worker_logger.info(f"Worker finished. Found text on {len(results)} slides.")
+    return results
 
 
 class AnalysisService:
@@ -116,100 +91,65 @@ class AnalysisService:
     """
 
     def __init__(self):
+        # В основном процессе живет только Whisper (Torch) и C++ детектор
         self.audio_service = AudioService(model_size="base")
-
-    def _post_process_slides(
-        self, slides: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
-        """
-        Умная фильтрация:
-        1. Находит повторяющиеся слова (водяные знаки) независимо от регистра.
-        2. Удаляет их.
-        3. Объединяет слайды.
-        """
-        if not slides:
-            return []
-
-        # 1. Статистический анализ (с нормализацией)
-        all_words_norm = []
-        for s in slides:
-            # Приводим к нижнему регистру для честной статистики
-            words = s["text"].lower().split()
-            # Убираем знаки препинания из слов для чистоты
-            clean_words = [w.strip(".,!?:;\"'|-«»") for w in words]
-            all_words_norm.extend(clean_words)
-
-        if not all_words_norm:
-            return slides
-
-        word_counts = Counter(all_words_norm)
-        total_slides = len(slides)
-
-        # Если слово (в нижнем регистре) встречается чаще чем на 30% слайдов - это мусор
-        watermark_threshold = 0.30
-        watermark_words_lower = {
-            word
-            for word, count in word_counts.items()
-            if count > total_slides * watermark_threshold
-        }
-
-        if watermark_words_lower:
-            logger.info(f"Detected dynamic watermarks: {watermark_words_lower}")
-
-        # 2. Очистка и дедупликация
-        final_slides = []
-
-        for s in slides:
-            original_words = s["text"].split()
-            # Фильтруем, проверяя lower() версию слова
-            clean_words = [
-                w
-                for w in original_words
-                if w.lower().strip(".,!?:;\"'|-«»") not in watermark_words_lower
-            ]
-            clean_text_str = " ".join(clean_words)
-
-            # Если после очистки осталось < 3 символов (или пусто) - это был пустой слайд с логотипом
-            if len(clean_text_str) < 3:
-                continue
-
-            # Дедупликация
-            if not final_slides or not is_similar(
-                clean_text_str, final_slides[-1]["text"]
-            ):
-                final_slides.append(
-                    {"timestamp": s["timestamp"], "text": clean_text_str}
-                )
-            else:
-                pass
-
-        return final_slides
+        self.video_service = SlideDetectionService(
+            min_scene_duration=2.0, min_area_ratio=0.15
+        )
 
     def analyze_content(self, video_path: str) -> Dict[str, Any]:
         path = Path(video_path)
         if not path.exists():
             raise FileNotFoundError(f"Video not found: {video_path}")
 
-        logger.info("Starting analysis for: %s", video_path)
+        logger.info("🚀 Starting analysis for: %s", video_path)
 
-        # Phase 1: Audio
-        logger.info("Phase 1: Audio Processing...")
-        audio_file = self.audio_service.extract_audio(video_path)
-        transcript = self.audio_service.transcribe(audio_file)
+        # --- Phase 1: Audio Processing (Main Process) ---
+        # Whisper работает здесь
+        logger.info("🎧 Phase 1: Audio Processing...")
+        transcript = []
+        detected_language = "en"  # Default fallback
+        try:
+            audio_file = self.audio_service.extract_audio(video_path)
+            transcript, detected_language = self.audio_service.transcribe(audio_file)
+            logger.info(
+                f"✅ Transcribed {len(transcript)} segments in {detected_language}"
+            )
+        except Exception as e:
+            logger.error(f"Audio processing failed: {e}")
 
-        # Phase 2: Video (Raw Extraction)
-        logger.info("Phase 2: Video OCR Extraction...")
-        ctx = multiprocessing.get_context("spawn")
-        with ctx.Pool(processes=1) as pool:
-            raw_slides = pool.apply(run_ocr_isolated, (video_path, 2.0))
+        # --- Phase 2: Visual Processing (C++ Detection) ---
+        # C++ работает здесь (быстро и без конфликтов)
+        logger.info("👁️ Phase 2: Visual Processing (Detection)...")
+        detected_slides = []
+        try:
+            detected_slides = self.video_service.process_video(video_path)
+            logger.info(f"⚡ C++ detected {len(detected_slides)} keyframes")
+        except Exception as e:
+            logger.error(f"Slide detection failed: {e}")
 
-        # Phase 3: Post-processing (Cleaning & Deduplication)
-        logger.info(f"Phase 3: Post-processing {len(raw_slides)} raw frames...")
-        clean_slides = self._post_process_slides(raw_slides)
-        logger.info(f"Final unique slides: {len(clean_slides)}")
+        # --- Phase 3: OCR (Isolated Process) ---
+        # Запускаем Paddle в отдельной "песочнице"
+        logger.info(
+            f"📖 Phase 3: OCR Extraction (Isolated, lang={detected_language})..."
+        )
+        visual_data = []
+        if detected_slides:
+            # Используем 'spawn', чтобы процесс был чистым (без Torch в памяти)
+            ctx = multiprocessing.get_context("spawn")
+            with ctx.Pool(processes=1) as pool:
+                # Передаем путь к видео, список кадров, и detected language
+                visual_data = pool.apply(
+                    _ocr_worker_task, (video_path, detected_slides, detected_language)
+                )
 
+        # --- Phase 4: Assembly ---
         return {
-            "meta": {"video_path": video_path, "status": "completed"},
+            "meta": {
+                "video_path": str(video_path),
+                "status": "completed",
+                "detected_language": detected_language,
+            },
             "transcription": transcript,
-            "visual_text": clean_slides,
+            "visual_context": visual_data,
         }

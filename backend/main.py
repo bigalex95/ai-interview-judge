@@ -8,18 +8,23 @@ Author: bigalex95
 """
 
 import os
-
-# Fix for OpenMP conflict (common in PyTorch/Paddle + FastAPI)
-os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-
 import logging
 import shutil
 from pathlib import Path
+
+# --- CRITICAL FIX: Library Conflicts (Torch vs Paddle) ---
+# Эти флаги ДОЛЖНЫ быть установлены до любых других импортов (особенно Torch/Paddle)
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"  # Разрешаем две копии OpenMP
+os.environ["FLAGS_use_mkldnn"] = "0"  # Выключаем MKLDNN в Paddle (конфликтует с Torch)
+os.environ["FLAGS_enable_mkldnn"] = "0"  # Дублирующий флаг для надежности
+os.environ["DNNL_VERBOSE"] = "0"  # Убираем лишний шум
+# ---------------------------------------------------------
 
 import uvicorn
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
+# Теперь можно импортировать тяжелые сервисы
 from backend.services.analysis_service import AnalysisService
 
 # Configure logging
@@ -43,10 +48,19 @@ analysis_service: AnalysisService | None = None
 
 @app.on_event("startup")
 def startup_event():
+    """
+    Инициализация ML моделей при старте сервера.
+    Это занимает время, но позволяет быстро отвечать на запросы.
+    """
     global analysis_service
     logger.info("Initializing ML Models...")
-    analysis_service = AnalysisService()
-    logger.info("ML Models Ready.")
+    try:
+        analysis_service = AnalysisService()
+        logger.info("✅ ML Models Ready (Audio + Video + OCR).")
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize ML models: {e}")
+        # Не роняем сервер полностью, чтобы /health работал
+        analysis_service = None
 
 
 @app.get("/")
@@ -63,112 +77,63 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """
-    Health check endpoint for monitoring and load balancers.
-
-    Returns:
-        JSON response with health status
-    """
-    return {"status": "healthy", "service": "ai-interview-judge"}
+    """Health check endpoint."""
+    status = "healthy" if analysis_service is not None else "degraded"
+    return {"status": status, "service": "ai-interview-judge"}
 
 
 @app.post("/analyze")
 async def analyze_video_endpoint(file: UploadFile = File(...)):
-    """Upload a video file and get multimodal analysis (text + audio)."""
+    """
+    Full End-to-End Analysis:
+    1. Upload Video
+    2. Extract Audio -> Whisper -> Text
+    3. Extract Keyframes (C++) -> PaddleOCR -> Text
+    4. Return JSON
+    """
     temp_dir = Path("temp_uploads")
     temp_dir.mkdir(exist_ok=True)
 
     file_path = temp_dir / file.filename
 
     try:
+        # Save uploaded file
         with file_path.open("wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Could not save file: {exc}")
 
-    try:
+        logger.info(
+            f"Received file: {file.filename}, size: {file_path.stat().st_size / 1024 / 1024:.2f} MB"
+        )
+
         if analysis_service is None:
-            raise RuntimeError("Analysis service not initialized")
+            raise HTTPException(
+                status_code=503, detail="ML Models not initialized. Check server logs."
+            )
 
+        # Run Analysis
         result = analysis_service.analyze_content(str(file_path))
         return result
+
     except Exception as exc:
-        logger.error("Analysis failed: %s", exc)
+        logger.error(f"Analysis failed: {exc}")
         raise HTTPException(status_code=500, detail=str(exc))
     finally:
-        # Optionally delete uploaded file after processing
-        # file_path.unlink(missing_ok=True)
-        pass
-
-
-@app.post("/api/v1/process-video")
-async def process_video_endpoint(
-    video: UploadFile = File(...),
-    min_scene_duration: float = 2.0,
-    min_area_ratio: float = 0.15,
-):
-    """
-    Process a video file to detect slide transitions.
-
-    Args:
-        video: Video file to process (multipart/form-data)
-        min_scene_duration: Minimum duration between slide changes (seconds)
-        min_area_ratio: Minimum area ratio for slide change detection (0.0-1.0)
-
-    Returns:
-        JSON response with detected slide segments
-
-    Raises:
-        HTTPException: If video processing fails
-    """
-    # TODO: Implement video processing logic
-    # This will integrate with the C++ slide detector module
-    logger.info(f"Received video: {video.filename}")
-
-    return JSONResponse(
-        status_code=501,
-        content={
-            "error": "Not Implemented",
-            "message": "Video processing endpoint coming soon. Use backend/test_demo.py for now.",
-        },
-    )
-
-
-@app.get("/api/v1/slides/{video_id}")
-async def get_slides(video_id: str):
-    """
-    Retrieve detected slides for a processed video.
-
-    Args:
-        video_id: Unique identifier for the video
-
-    Returns:
-        JSON response with slide information
-
-    Raises:
-        HTTPException: If video not found or not processed
-    """
-    # TODO: Implement slide retrieval logic
-    logger.info(f"Requesting slides for video: {video_id}")
-
-    return JSONResponse(
-        status_code=501,
-        content={
-            "error": "Not Implemented",
-            "message": "Slide retrieval endpoint coming soon.",
-        },
-    )
+        # Cleanup
+        if file_path.exists():
+            file_path.unlink()
 
 
 def main():
-    """
-    Start the FastAPI server.
-
-    Runs the uvicorn server with hot-reload enabled for development.
-    """
+    """Start the FastAPI server."""
     logger.info("Starting AI Interview Judge API server...")
+    # workers=1 важно, чтобы модели не грузились в несколько процессов и не съели всю RAM
     uvicorn.run(
-        "backend.main:app", host="0.0.0.0", port=8000, reload=True, log_level="info"
+        "backend.main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+        log_level="info",
+        workers=1,
     )
 
 
