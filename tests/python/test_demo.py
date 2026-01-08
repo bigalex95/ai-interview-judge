@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Optional, List
 
 # Add project root and libs to Python path
-PROJECT_ROOT = Path(__file__).parent.parent
+PROJECT_ROOT = Path(__file__).parent.parent.parent  # Go up to actual project root
 LIBS_PATH = PROJECT_ROOT / "libs"
 sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(LIBS_PATH))
