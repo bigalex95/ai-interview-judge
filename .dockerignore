@@ -1,0 +1,25 @@
+# Игнорируем Git
+.git
+.gitignore
+
+# Игнорируем локальные виртуальные окружения
+.venv
+venv
+env
+
+# Игнорируем кэш Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+
+# Игнорируем временные файлы и загрузки
+temp_uploads/
+temp_audio/
+output/
+logs/
+
+# Игнорируем локальные артефакты сборки
+build/
+libs/
+.env

@@ -1,0 +1,71 @@
+services:
+  # ==========================================
+  # CPU Version (Default)
+  # ==========================================
+  ai-judge-cpu:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.cpu
+    image: ai-interview-judge:cpu
+    container_name: ai-judge-cpu
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      # Persistent storage for uploaded files
+      - ./temp_uploads:/app/temp_uploads
+      - ./temp_audio:/app/temp_audio
+      - ./data:/app/data
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - ai-judge-network
+
+  # ==========================================
+  # GPU Version (NVIDIA)
+  # ==========================================
+  ai-judge-gpu:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.gpu
+    image: ai-interview-judge:gpu
+    container_name: ai-judge-gpu
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      # Persistent storage for uploaded files
+      - ./temp_uploads:/app/temp_uploads
+      - ./temp_audio:/app/temp_audio
+      - ./data:/app/data
+      - ./logs:/app/logs
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - ai-judge-network
+    profiles:
+      - gpu
+
+networks:
+  ai-judge-network:
+    driver: bridge
