@@ -51,8 +51,8 @@ ai-interview-judge/
 
 - [x] **Sprint 1:** C++ Scene Detection Engine & Python Bindings.
 - [x] **Sprint 2:** Multimodal Extraction (OCR + ASR Integration).
-- [ ] **Sprint 3:** Logic Core & LLM Evaluation Pipeline.
-- [ ] **Sprint 4:** MLOps (Docker, CI/CD, API).
+- [x] **Sprint 3:** Logic Core & LLM Evaluation Pipeline.
+- [x] **Sprint 4:** MLOps (Docker, CI/CD, API).
 
 ## 📦 Build & Run
 

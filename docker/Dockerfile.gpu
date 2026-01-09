@@ -1,0 +1,95 @@
+# ==========================================
+# GPU-Optimized Version (NVIDIA CUDA)
+# ==========================================
+FROM nvidia/cuda:12.1.0-runtime-ubuntu22.04
+
+# Set timezone non-interactively
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Europe/Moscow
+
+# Устанавливаем Python 3.11 и build tools
+RUN apt-get update && apt-get install -y \
+    software-properties-common \
+    && add-apt-repository ppa:deadsnakes/ppa \
+    && apt-get update && apt-get install -y \
+    python3.11 \
+    python3.11-dev \
+    python3.11-distutils \
+    python3-pip \
+    build-essential \
+    cmake \
+    git \
+    ffmpeg \
+    libopencv-dev \
+    libopencv-core4.5d \
+    libopencv-imgproc4.5d \
+    libopencv-videoio4.5d \
+    libopencv-imgcodecs4.5d \
+    libgomp1 \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && cd /usr/lib/x86_64-linux-gnu \
+    && ln -sf libopencv_videoio.so.4.5.4d libopencv_videoio.so.410 \
+    && ln -sf libopencv_core.so.4.5.4d libopencv_core.so.410 \
+    && ln -sf libopencv_imgproc.so.4.5.4d libopencv_imgproc.so.410 \
+    && ln -sf libopencv_imgcodecs.so.4.5.4d libopencv_imgcodecs.so.410
+
+# Устанавливаем Python 3.11 как основной
+RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1 \
+    && update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1
+
+# Устанавливаем 'uv' (быстрый менеджер пакетов)
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+
+WORKDIR /app
+
+# Build C++ module first
+COPY CMakeLists.txt .
+COPY cpp_core/ ./cpp_core/
+RUN mkdir build && cd build && \
+    cmake .. -DPython3_EXECUTABLE=/usr/bin/python3.11 && \
+    make -j$(nproc)
+
+# Копируем файлы зависимостей
+COPY pyproject.toml uv.lock ./
+
+# Устанавливаем Python библиотеки (GPU версии)
+RUN uv sync --frozen
+
+# Копируем исходный код бэкенда
+COPY backend/ ./backend/
+
+# Pre-download ML models during build (so container doesn't need internet at runtime)
+# 1. Download Whisper model
+RUN uv run python -c "from faster_whisper import WhisperModel; WhisperModel('base', device='cpu', compute_type='int8')"
+
+# 2. Download PaddleOCR models (detection + recognition)
+RUN uv run python -c "from paddleocr import PaddleOCR; ocr = PaddleOCR(use_angle_cls=False, lang='en', use_gpu=False, show_log=False)"
+
+# Создаем временные папки
+RUN mkdir -p temp_uploads temp_audio
+
+# --- Настройка окружения ---
+
+# 1. Решение конфликтов библиотек
+ENV KMP_DUPLICATE_LIB_OK=TRUE
+ENV FLAGS_use_mkldnn=0
+ENV FLAGS_enable_mkldnn=0
+ENV DNNL_VERBOSE=0
+
+# 2. GPU-specific settings
+ENV CUDA_VISIBLE_DEVICES=0
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
+
+# 3. Добавляем путь к нашей C++ либе
+ENV PYTHONPATH=/app:/app/libs
+
+# 4. Отключаем буферизацию логов
+ENV PYTHONUNBUFFERED=1
+
+# Открываем порт
+EXPOSE 8000
+
+# Запуск сервера через uv run
+CMD ["uv", "run", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
