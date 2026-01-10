@@ -66,6 +66,50 @@ services:
     profiles:
       - gpu
 
+  # ==========================================
+  # Frontend (Streamlit)
+  # ==========================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: ai-interview-judge:frontend
+    container_name: ai-judge-frontend
+    ports:
+      - "8501:8501"  # Доступ из браузера: http://localhost:8501
+    environment:
+      # Внутри Docker сети фронт должен стучаться к бэкенду по имени сервиса!
+      # Если ты запускаешь GPU версию, поменяй тут на http://ai-judge-gpu:8000
+      - API_URL=http://ai-judge-cpu:8000
+    depends_on:
+      ai-judge-cpu:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - ai-judge-network
+
+  # ==========================================
+  # Frontend для GPU (Streamlit)
+  # ==========================================
+  frontend-gpu:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: ai-interview-judge:frontend
+    container_name: ai-judge-frontend-gpu
+    ports:
+      - "8501:8501"
+    environment:
+      - API_URL=http://ai-judge-gpu:8000
+    depends_on:
+      ai-judge-gpu:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - ai-judge-network
+    profiles:
+      - gpu
+
 networks:
   ai-judge-network:
     driver: bridge
