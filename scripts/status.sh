@@ -1,58 +1,58 @@
 #!/bin/bash
 
-# 🔍 Скрипт проверки статуса AI Interview Judge
+# 🔍 Status check script for AI Interview Judge
 
-# Определяем корневую директорию проекта
+# Determine the project root directory
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
 echo "╔════════════════════════════════════════════════════════════════╗"
 echo "║                                                                ║"
-echo "║         🤖 AI Interview Judge - Статус Системы                ║"
+echo "║         🤖 AI Interview Judge - System Status                  ║"
 echo "║                                                                ║"
 echo "╚════════════════════════════════════════════════════════════════╝"
 echo ""
 
-# Проверка Docker Compose
-echo "📦 Проверка контейнеров..."
+# Check Docker Compose
+echo "📦 Checking containers..."
 docker compose ps
 echo ""
 
-# Проверка Frontend
-echo "🌐 Проверка Frontend (http://localhost:8501)..."
+# Check Frontend
+echo "🌐 Checking Frontend (http://localhost:8501)..."
 if curl -sf http://localhost:8501 > /dev/null; then
-    echo "✅ Frontend работает!"
+    echo "✅ Frontend is running!"
 else
-    echo "❌ Frontend не отвечает"
-    echo "   Попробуйте: docker compose logs frontend"
+    echo "❌ Frontend is not responding"
+    echo "   Try: docker compose logs frontend"
 fi
 echo ""
 
-# Проверка Backend
-echo "🔧 Проверка Backend (http://localhost:8000)..."
+# Check Backend
+echo "🔧 Checking Backend (http://localhost:8000)..."
 if curl -sf http://localhost:8000/health > /dev/null; then
-    echo "✅ Backend работает!"
+    echo "✅ Backend is running!"
     curl -s http://localhost:8000/health | python3 -m json.tool
 else
-    echo "❌ Backend не отвечает"
-    echo "   Попробуйте: docker compose logs ai-judge-cpu"
+    echo "❌ Backend is not responding"
+    echo "   Try: docker compose logs ai-judge-cpu"
 fi
 echo ""
 
-# Полезные команды
+# Useful commands
 echo "╔════════════════════════════════════════════════════════════════╗"
-echo "║  📋 Полезные команды:                                         ║"
+echo "║  📋 Useful commands:                                         ║"
 echo "║                                                                ║"
-echo "║  docker compose logs -f frontend    # Логи фронтенда          ║"
-echo "║  docker compose logs -f ai-judge-cpu # Логи бэкенда           ║"
-echo "║  docker compose restart frontend    # Перезапуск фронтенда    ║"
-echo "║  docker compose down                # Остановить все          ║"
+echo "║  docker compose logs -f frontend    # Frontend logs          ║"
+echo "║  docker compose logs -f ai-judge-cpu # Backend logs           ║"
+echo "║  docker compose restart frontend    # Restart the frontend    ║"
+echo "║  docker compose down                # Stop everything         ║"
 echo "║                                                                ║"
 echo "╚════════════════════════════════════════════════════════════════╝"
 echo ""
 
-# Ссылки
-echo "🌐 Открыть в браузере:"
+# Links
+echo "🌐 Open in the browser:"
 echo "   Frontend:  http://localhost:8501"
 echo "   API Docs:  http://localhost:8000/docs"
 echo ""

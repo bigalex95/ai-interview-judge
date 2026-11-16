@@ -8,8 +8,8 @@ from backend.services.audio_service import AudioService
 from backend.services.video_service import SlideDetectionService
 from backend.services.llm_service import LLMJudgeService
 
-# ВАЖНО: НЕ импортируем OcrService здесь на верхнем уровне,
-# чтобы не спровоцировать загрузку Paddle в основном процессе.
+# IMPORTANT: do NOT import OcrService here at module level,
+# to avoid triggering a Paddle load in the main process.
 
 logger = logging.getLogger(__name__)
 
@@ -18,8 +18,8 @@ def _ocr_worker_task(
     video_path: str, slides_metadata: List[Dict], language: str = "en"
 ) -> List[Dict]:
     """
-    Эта функция запускается в ОТДЕЛЬНОМ процессе.
-    Здесь безопасно грузить PaddleOCR, так как Torch здесь нет.
+    This function runs in a SEPARATE process.
+    It is safe to load PaddleOCR here because Torch is not loaded.
 
     Args:
         video_path: Path to the video file
@@ -28,7 +28,7 @@ def _ocr_worker_task(
     """
     import logging
 
-    # Настраиваем логи для дочернего процесса
+    # Configure logging for the child process
     logging.basicConfig(level=logging.INFO)
     worker_logger = logging.getLogger("OCR_Worker")
 
@@ -40,29 +40,29 @@ def _ocr_worker_task(
     cap = None
 
     try:
-        # --- FIX: Запрещаем Paddle перехватывать системные сигналы (SIGTERM) ---
+        # --- FIX: Prevent Paddle from intercepting system signals (SIGTERM) ---
         import paddle
 
         paddle.disable_signal_handler()
         # -----------------------------------------------------------------------
 
-        # 1. Lazy Import внутри процесса
+        # 1. Lazy import inside the process
         from backend.services.ocr_service import OcrService
 
         ocr_service = OcrService(lang=language)
 
-        # 2. Открываем видео (OpenCV безопасен в мультипроцессинге)
+        # 2. Open the video (OpenCV is safe in multiprocessing)
         cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
             worker_logger.error("Failed to open video in worker")
             return []
 
-        # 3. Пробегаем по списку найденных слайдов
+        # 3. Iterate over the detected slides
         for slide in slides_metadata:
             frame_idx = slide["frame_index"]
             timestamp = slide["timestamp_sec"]
 
-            # Прыгаем к кадру
+            # Seek to the frame
             cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
             ret, frame = cap.read()
 
@@ -92,7 +92,7 @@ class AnalysisService:
     """
 
     def __init__(self):
-        # В основном процессе живет только Whisper (Torch) и C++ детектор
+        # The main process only hosts Whisper (Torch) and the C++ detector
         self.audio_service = AudioService(model_size="base")
         self.video_service = SlideDetectionService(
             min_scene_duration=2.0, min_area_ratio=0.15
@@ -107,7 +107,7 @@ class AnalysisService:
         logger.info("🚀 Starting analysis for: %s", video_path)
 
         # --- Phase 1: Audio Processing (Main Process) ---
-        # Whisper работает здесь
+        # Whisper runs here
         logger.info("🎧 Phase 1: Audio Processing...")
         transcript = []
         detected_language = "en"  # Default fallback
@@ -121,7 +121,7 @@ class AnalysisService:
             logger.error(f"Audio processing failed: {e}")
 
         # --- Phase 2: Visual Processing (C++ Detection) ---
-        # C++ работает здесь (быстро и без конфликтов)
+        # C++ runs here (fast and conflict-free)
         logger.info("👁️ Phase 2: Visual Processing (Detection)...")
         detected_slides = []
         try:
@@ -131,21 +131,21 @@ class AnalysisService:
             logger.error(f"Slide detection failed: {e}")
 
         # --- Phase 3: OCR (Isolated Process) ---
-        # Запускаем Paddle в отдельной "песочнице"
+        # Run Paddle in a separate "sandbox"
         logger.info(
             f"📖 Phase 3: OCR Extraction (Isolated, lang={detected_language})..."
         )
         visual_data = []
         if detected_slides:
-            # Используем 'spawn', чтобы процесс был чистым (без Torch в памяти)
+            # Use 'spawn' so the process is clean (no Torch in memory)
             ctx = multiprocessing.get_context("spawn")
             with ctx.Pool(processes=1) as pool:
-                # Передаем путь к видео, список кадров, и detected language
+                # Pass the video path, the frame list, and the detected language
                 visual_data = pool.apply(
                     _ocr_worker_task, (video_path, detected_slides, detected_language)
                 )
 
-        # Собираем сырые данные
+        # Collect raw data
         analysis_result = {
             "meta": {
                 "video_path": str(video_path),
@@ -158,10 +158,10 @@ class AnalysisService:
 
         # --- [NEW] Phase 4: LLM Evaluation ---
         logger.info("🧠 Phase 4: LLM Evaluation...")
-        # Передаем собранные данные (текст + слайды) в Gemini
+        # Send the collected data (text + slides) to Gemini
         ai_feedback = self.llm_service.evaluate_interview(analysis_result)
 
-        # Добавляем оценку в финальный ответ
+        # Add the evaluation to the final response
         analysis_result["ai_evaluation"] = ai_feedback
 
         return analysis_result

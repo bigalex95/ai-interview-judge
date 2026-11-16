@@ -1,62 +1,48 @@
-# 🎨 AI Interview Judge - Frontend (Streamlit)
+# AI Interview Judge - Frontend (Streamlit)
 
-Веб-интерфейс для системы оценки интервью на основе AI.
+Web UI for the AI interview evaluation system.
 
-## 🚀 Быстрый запуск
+## Quick start
 
-### Запуск с Docker Compose (Рекомендуется)
+### Docker Compose (recommended)
 
-#### CPU версия (по умолчанию):
-
-```bash
-# Из корневой папки проекта
-docker-compose up --build
-```
-
-Фронтенд будет доступен по адресу: **http://localhost:8501**
-
-Backend API: **http://localhost:8000**
-
-#### GPU версия (если есть NVIDIA GPU):
+CPU version (default):
 
 ```bash
-docker-compose --profile gpu up --build
+# From the project root
+docker compose up --build
 ```
 
-### Локальная разработка (без Docker)
+Frontend: **http://localhost:8501**, backend API: **http://localhost:8000**
 
-1. **Установка зависимостей:**
+GPU version (requires an NVIDIA GPU):
+
+```bash
+docker compose --profile gpu up --build
+```
+
+### Local development (without Docker)
 
 ```bash
 pip install streamlit requests watchdog
-```
 
-2. **Запуск фронтенда:**
-
-```bash
-# По умолчанию подключается к http://localhost:8000
+# Connects to http://localhost:8000 by default
 streamlit run app.py
 
-# Или с кастомным URL бэкенда:
+# Or with a custom backend URL
 API_URL=http://your-backend:8000 streamlit run app.py
 ```
 
-## 📋 Возможности
+## Features
 
-- 📹 **Загрузка видео** в форматах MP4
-- 🎥 **Предпросмотр видео** прямо в браузере
-- ⚡ **Асинхронный анализ** с прогресс-индикатором
-- 📊 **Визуализация результатов:**
-  - Общая оценка интервью (0-10)
-  - Цветовая индикация качества ответов
-  - AI резюме по всему интервью
-- 📝 **Детальный разбор вопросов:**
-  - Текст со слайда (OCR)
-  - Ответ кандидата (Speech-to-Text)
-  - Вердикт AI (Correct/Wrong/Partial)
-  - Комментарии и объяснения
+- Upload an MP4 interview video and preview it in the browser
+- Overall interview score (0-10) with color-coded feedback and an AI summary
+- Per-question breakdown:
+  - Slide text (OCR)
+  - Candidate answer (speech-to-text)
+  - AI verdict (Correct / Wrong / Partial) with an explanation
 
-## 🏗️ Архитектура
+## Architecture
 
 ```
 ┌─────────────────┐         ┌──────────────────┐
@@ -64,84 +50,63 @@ API_URL=http://your-backend:8000 streamlit run app.py
 │  (Frontend)     │         │  (ai-judge-cpu)  │
 │  Port: 8501     │◀────────│  Port: 8000      │
 └─────────────────┘  JSON   └──────────────────┘
-        │                            │
-        │                            ▼
-        │                   ┌─────────────────┐
-        │                   │   AI Services   │
-        │                   │  - Whisper      │
-        └───────────────────│  - PaddleOCR    │
-            Docker Network  │  - LLM Judge    │
-                           └─────────────────┘
+                                     │
+                                     ▼
+                            ┌─────────────────┐
+                            │   AI Services   │
+                            │  - Whisper      │
+                            │  - PaddleOCR    │
+                            │  - LLM Judge    │
+                            └─────────────────┘
 ```
 
-## 🔧 Конфигурация
+## Configuration
 
-### Переменные окружения:
+| Variable  | Description     | Default                 |
+| --------- | --------------- | ----------------------- |
+| `API_URL` | Backend API URL | `http://localhost:8000` |
 
-| Переменная | Описание        | По умолчанию            |
-| ---------- | --------------- | ----------------------- |
-| `API_URL`  | URL бэкенда API | `http://localhost:8000` |
+In Docker Compose this is set to `http://ai-judge-cpu:8000` or `http://ai-judge-gpu:8000`.
 
-В Docker Compose это автоматически настраивается как `http://ai-judge-cpu:8000` или `http://ai-judge-gpu:8000`.
+## Troubleshooting
 
-## 🐛 Устранение неполадок
+### Cannot connect to the backend
 
-### Ошибка подключения к бэкенду
+1. Check that the backend container is running: `docker ps | grep ai-judge`
+2. Check the backend healthcheck: `docker inspect ai-judge-cpu | grep Health`
+3. Check the backend logs: `docker logs ai-judge-cpu`
 
-**Симптом:** `❌ Не удалось подключиться к бэкенду`
+### Request timeout during analysis
 
-**Решение:**
-
-1. Проверьте, запущен ли бэкенд контейнер:
-
-   ```bash
-   docker ps | grep ai-judge
-   ```
-
-2. Проверьте healthcheck бэкенда:
-
-   ```bash
-   docker inspect ai-judge-cpu | grep Health
-   ```
-
-3. Проверьте логи бэкенда:
-   ```bash
-   docker logs ai-judge-cpu
-   ```
-
-### Timeout при анализе
-
-**Симптом:** Request timeout после 300 секунд
-
-**Решение:** Для больших видео увеличьте timeout в [app.py](app.py#L45):
+The request times out after 300 seconds. For longer videos, raise the timeout in [app.py](app.py):
 
 ```python
-response = requests.post(API_URL, files=files, timeout=600)  # 10 минут
+response = requests.post(API_URL, files=files, timeout=600)  # 10 minutes
 ```
 
-### Порт 8501 занят
+### Port 8501 is in use
 
-**Решение:** Измените порт в docker-compose.yml:
+Change the port mapping in `docker-compose.yml`:
 
 ```yaml
 ports:
-  - "8502:8501" # Используйте 8502 вместо 8501
+  - "8502:8501" # use 8502 instead of 8501
 ```
 
-## 📦 Зависимости
+## Dependencies
 
-- `streamlit` - веб-фреймворк
-- `requests` - HTTP клиент для общения с API
-- `watchdog` - файловый watcher для hot-reload
+- `streamlit` - web framework
+- `requests` - HTTP client for the API
+- `watchdog` - file watcher for hot reload
 
-## 🎯 Roadmap
+## Roadmap
 
-- [ ] Поддержка нескольких видео одновременно
-- [ ] Экспорт результатов в PDF/Excel
-- [ ] История анализов (БД)
-- [ ] Настройка параметров LLM через UI
-- [ ] Многоязычная поддержка интерфейса
+- [ ] Multiple videos at once
+- [ ] Export results to PDF/Excel
+- [ ] Analysis history (database)
+- [ ] LLM parameters configurable from the UI
+- [ ] Multilingual UI
 
-## 📄 Лицензия
+## License
 
-Смотрите [LICENSE](../LICENSE) в корне проекта.
+See [LICENSE](../LICENSE) in the project root.

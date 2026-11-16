@@ -76,10 +76,10 @@ services:
     image: ai-interview-judge:frontend
     container_name: ai-judge-frontend
     ports:
-      - "8501:8501"  # Доступ из браузера: http://localhost:8501
+      - "8501:8501"  # Browser access: http://localhost:8501
     environment:
-      # Внутри Docker сети фронт должен стучаться к бэкенду по имени сервиса!
-      # Если ты запускаешь GPU версию, поменяй тут на http://ai-judge-gpu:8000
+      # Inside the Docker network the frontend must reach the backend by service name!
+      # If you run the GPU version, change this to http://ai-judge-gpu:8000
       - API_URL=http://ai-judge-cpu:8000
     depends_on:
       ai-judge-cpu:
@@ -89,7 +89,7 @@ services:
       - ai-judge-network
 
   # ==========================================
-  # Frontend для GPU (Streamlit)
+  # Frontend for GPU (Streamlit)
   # ==========================================
   frontend-gpu:
     build:

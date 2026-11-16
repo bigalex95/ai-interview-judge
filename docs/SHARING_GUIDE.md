@@ -1,359 +1,43 @@
-# 🌍 Как поделиться AI Interview Judge с друзьями
+# Sharing AI Interview Judge Over the Internet
 
-## 🚀 Способы предоставления доступа
+The app runs on your machine (frontend on port 8501, backend on port 8000). To let someone else try it, expose the frontend through a tunnel. Start the system first (`./scripts/start.sh` or `docker compose up -d`).
 
-### Вариант 1: ngrok (Рекомендуется - Самый простой)
-
-**ngrok** создает безопасный туннель из интернета к твоему localhost.
-
-#### Установка и использование:
+## Option 1: ngrok (`scripts/share.sh`)
 
 ```bash
-# 1. Установи ngrok
-# Linux/macOS (с Homebrew)
-brew install ngrok
-
-# Или скачай с https://ngrok.com/download
-
-# 2. Зарегистрируйся на ngrok.com и получи authtoken
-ngrok config add-authtoken YOUR_AUTH_TOKEN
-
-# 3. Запусти туннель для Frontend
+ngrok config add-authtoken YOUR_AUTH_TOKEN   # once, after signing up at ngrok.com
+./scripts/share.sh                           # interactive: frontend, backend, or both
+# or directly:
 ngrok http 8501
 ```
 
-После запуска получишь:
+You get a URL like `https://abcd-1234.ngrok-free.app`. On the free plan the URL changes on every restart and traffic is limited.
 
-```
-Forwarding: https://abcd-1234-5678.ngrok-free.app -> http://localhost:8501
-```
-
-**Отправь эту ссылку другу** - он сможет открыть твой Streamlit UI!
-
-#### Для нескольких портов одновременно:
-
-Создай файл `ngrok.yml`:
-
-```yaml
-version: "2"
-authtoken: YOUR_AUTH_TOKEN
-tunnels:
-  frontend:
-    proto: http
-    addr: 8501
-  backend:
-    proto: http
-    addr: 8000
-```
-
-Запусти:
+## Option 2: Cloudflare Tunnel (`scripts/share-cloudflare.sh`)
 
 ```bash
-ngrok start --all --config ngrok.yml
-```
-
-**Плюсы:**
-
-- ✅ Очень просто
-- ✅ HTTPS из коробки
-- ✅ Бесплатный план есть
-- ✅ Стабильная работа
-
-**Минусы:**
-
-- ⚠️ URL меняется при каждом перезапуске (в бесплатном плане)
-- ⚠️ Есть ограничения на трафик
-
----
-
-### Вариант 2: Cloudflare Tunnel (Бесплатно, без ограничений)
-
-**Cloudflare Tunnel** - отличная бесплатная альтернатива ngrok без ограничений трафика.
-
-#### Установка:
-
-```bash
-# Linux
-wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
-sudo dpkg -i cloudflared-linux-amd64.deb
-
-# macOS
-brew install cloudflare/cloudflare/cloudflared
-```
-
-#### Использование:
-
-```bash
-# 1. Аутентификация (один раз)
-cloudflared tunnel login
-
-# 2. Создай туннель
-cloudflared tunnel create ai-judge
-
-# 3. Запусти туннель для Frontend
+./scripts/share-cloudflare.sh
+# or directly:
 cloudflared tunnel --url http://localhost:8501
 ```
 
-Получишь постоянный URL типа: `https://your-name.trycloudflare.com`
+A temporary `https://xxx.trycloudflare.com` URL is created without sign-up. It works while the terminal stays open. A named tunnel with your own domain requires a Cloudflare account (`cloudflared tunnel login`, `cloudflared tunnel create ai-judge`).
 
-#### Продвинутая настройка (с конфигом):
-
-Создай `cloudflared-config.yml`:
-
-```yaml
-tunnel: YOUR_TUNNEL_ID
-credentials-file: /path/to/credentials.json
-
-ingress:
-  - hostname: ai-judge.yourdomain.com
-    service: http://localhost:8501
-  - hostname: api-ai-judge.yourdomain.com
-    service: http://localhost:8000
-  - service: http_status:404
-```
-
-**Плюсы:**
-
-- ✅ Полностью бесплатно
-- ✅ Без ограничений трафика
-- ✅ Можно использовать свой домен
-- ✅ HTTPS автоматически
-
-**Минусы:**
-
-- ⚠️ Чуть сложнее в настройке
-
----
-
-### Вариант 3: LocalTunnel (Самый быстрый)
+## Option 3: LocalTunnel
 
 ```bash
-# Установка
 npm install -g localtunnel
-
-# Запуск
 lt --port 8501 --subdomain my-ai-judge
 ```
 
-Получишь: `https://my-ai-judge.loca.lt`
+Quick and requires no sign-up, but less stable, and it shows a warning page on first visit.
 
-**Плюсы:**
+## Option 4: Permanent hosting
 
-- ✅ Моментальный запуск
-- ✅ Не требует регистрации
+For a permanent deployment, host the backend on a container platform (Railway, Render, DigitalOcean App Platform, Google Cloud Run) using `docker-compose.yml`/`docker/Dockerfile.cpu`. The Streamlit frontend can be deployed separately on [Streamlit Community Cloud](https://share.streamlit.io); set `API_URL` to the backend's public URL.
 
-**Минусы:**
+## Security notes
 
-- ⚠️ Менее стабилен
-- ⚠️ Показывает предупреждение при первом входе
-
----
-
-### Вариант 4: Streamlit Cloud (Для публичного деплоя)
-
-Streamlit предлагает **бесплатный хостинг** для приложений!
-
-#### Шаги:
-
-1. **Загрузи код на GitHub** (если еще не загружен)
-2. **Перейди на:** https://share.streamlit.io
-3. **Подключи GitHub репозиторий**
-4. **Укажи:**
-   - Repository: `bigalex95/ai-interview-judge`
-   - Branch: `main` (или твоя ветка)
-   - Main file: `frontend/app.py`
-5. **Добавь секреты** (API ключи) в настройках
-
-**Получишь постоянный URL:** `https://your-app.streamlit.app`
-
-**Важно:** Для этого варианта нужно разместить бэкенд отдельно (Railway, Render, Heroku)
-
-**Плюсы:**
-
-- ✅ Постоянный URL
-- ✅ Автоматические обновления из Git
-- ✅ Полностью бесплатно
-- ✅ Хостинг от Streamlit
-
-**Минусы:**
-
-- ⚠️ Нужно деплоить бэкенд отдельно
-- ⚠️ Публичное приложение (все могут найти)
-
----
-
-### Вариант 5: Deploy на облачный сервер
-
-Для серьезного использования - разверни на сервере.
-
-#### Быстрые варианты:
-
-1. **Railway.app** (бесплатный план $5/месяц кредит)
-
-   ```bash
-   railway login
-   railway init
-   railway up
-   ```
-
-2. **Render.com** (бесплатный tier)
-
-   - Создай Web Service
-   - Подключи GitHub
-   - Укажи `docker-compose.yml`
-
-3. **DigitalOcean App Platform** ($5/месяц)
-
-   - Один клик деплой
-   - Автоматические обновления
-
-4. **Google Cloud Run** (pay-as-you-go, почти бесплатно для малого трафика)
-
----
-
-## 🎯 Рекомендации для твоего случая:
-
-### Для быстрой демонстрации другу (5 минут):
-
-```bash
-# Вариант 1: ngrok
-ngrok http 8501
-# Отправь ссылку другу
-```
-
-### Для постоянного доступа (бесплатно):
-
-```bash
-# Вариант 2: Cloudflare Tunnel
-cloudflared tunnel --url http://localhost:8501
-```
-
-### Для публичной демонстрации (в портфолио):
-
-- Вариант 4: **Streamlit Cloud** + **Railway/Render** для бэкенда
-
----
-
-## 📝 Готовый скрипт для ngrok
-
-Создам скрипт для быстрого sharing:
-
-```bash
-#!/bin/bash
-# share.sh
-
-echo "🌍 Sharing AI Interview Judge..."
-echo ""
-
-# Проверка, запущена ли система
-if ! curl -sf http://localhost:8501 > /dev/null; then
-    echo "❌ Frontend не запущен!"
-    echo "   Запусти сначала: docker compose up -d"
-    exit 1
-fi
-
-# Проверка ngrok
-if ! command -v ngrok &> /dev/null; then
-    echo "📦 ngrok не установлен"
-    echo ""
-    echo "Установи ngrok:"
-    echo "  Linux: wget https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz"
-    echo "  macOS: brew install ngrok"
-    echo ""
-    echo "Зарегистрируйся: https://ngrok.com/signup"
-    echo "Получи token и запусти: ngrok config add-authtoken YOUR_TOKEN"
-    exit 1
-fi
-
-echo "🚀 Запускаю ngrok туннель..."
-echo ""
-echo "Frontend будет доступен по публичному URL"
-echo "Нажми Ctrl+C для остановки"
-echo ""
-
-ngrok http 8501
-```
-
-Сохрани как `share.sh`, сделай исполняемым и запусти:
-
-```bash
-chmod +x share.sh
-./share.sh
-```
-
----
-
-## 🔒 Важные замечания по безопасности:
-
-### ⚠️ Внимание:
-
-1. **API ключи:** Убедись, что `.env` файл не попадает в публичный доступ
-2. **Аутентификация:** Рассмотри добавление простого пароля в Streamlit:
-
-   ```python
-   import streamlit as st
-
-   password = st.text_input("Пароль", type="password")
-   if password != "твой_пароль":
-       st.stop()
-   ```
-
-3. **Rate Limiting:** При публичном доступе можешь быстро израсходовать OpenAI credits
-4. **Логи:** Будь осторожен с персональными данными в логах
-
----
-
-## 🎨 Дополнительно: Улучшение для sharing
-
-Если планируешь часто делиться, добавь в `frontend/app.py`:
-
-```python
-# В начале файла
-import os
-
-# Режим демо (без реальных API вызовов)
-DEMO_MODE = os.getenv("DEMO_MODE", "false").lower() == "true"
-
-if DEMO_MODE:
-    st.warning("⚠️ Демо режим: используются заранее подготовленные результаты")
-```
-
-Тогда для sharing без трат на API:
-
-```bash
-DEMO_MODE=true streamlit run frontend/app.py
-```
-
----
-
-## 📊 Сравнение вариантов:
-
-| Вариант             | Сложность           | Стоимость   | Стабильность    | URL        | Лучше для         |
-| ------------------- | ------------------- | ----------- | --------------- | ---------- | ----------------- |
-| **ngrok**           | ⭐️ Легко           | Бесплатно\* | ⭐️⭐️⭐️⭐️⭐️ | Временный  | Быстрая демка     |
-| **Cloudflare**      | ⭐️⭐️ Средне       | Бесплатно   | ⭐️⭐️⭐️⭐️⭐️ | Постоянный | Постоянный доступ |
-| **LocalTunnel**     | ⭐️ Легко           | Бесплатно   | ⭐️⭐️⭐️       | Временный  | Тесты             |
-| **Streamlit Cloud** | ⭐️⭐️⭐️ Сложнее   | Бесплатно   | ⭐️⭐️⭐️⭐️⭐️ | Постоянный | Портфолио         |
-| **Cloud Server**    | ⭐️⭐️⭐️⭐️ Сложно | $5-20/мес   | ⭐️⭐️⭐️⭐️⭐️ | Постоянный | Продакшн          |
-
-\*ngrok бесплатно до 1 одновременного туннеля и ограниченного трафика
-
----
-
-## 🎯 Мой совет:
-
-**Для твоего друга прямо сейчас:**
-
-1. Убедись что система запущена: `./status.sh`
-2. Установи ngrok: `brew install ngrok` (или скачай с сайта)
-3. Зарегистрируйся: https://dashboard.ngrok.com/signup
-4. Получи authtoken: https://dashboard.ngrok.com/get-started/your-authtoken
-5. Настрой: `ngrok config add-authtoken YOUR_TOKEN`
-6. Запусти: `ngrok http 8501`
-7. Скопируй URL типа `https://xxxx.ngrok-free.app` и отправь другу
-
-**Готово! Друг сможет открыть твое приложение в браузере!** 🚀
-
----
-
-**P.S.** Создам для тебя готовый скрипт `share.sh` с автоматической проверкой и запуском ngrok.
+1. Keep `.env` (API keys) out of version control and out of images that you publish.
+2. A public URL lets anyone upload videos and spend your LLM API credits. Add a simple password gate to the Streamlit app, or restrict access (for example Cloudflare Access).
+3. Interview videos and logs may contain personal data; do not leave tunnels open longer than needed.

@@ -13,18 +13,18 @@ import shutil
 from pathlib import Path
 
 # --- CRITICAL FIX: Library Conflicts (Torch vs Paddle) ---
-# Эти флаги ДОЛЖНЫ быть установлены до любых других импортов (особенно Torch/Paddle)
-os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"  # Разрешаем две копии OpenMP
-os.environ["FLAGS_use_mkldnn"] = "0"  # Выключаем MKLDNN в Paddle (конфликтует с Torch)
-os.environ["FLAGS_enable_mkldnn"] = "0"  # Дублирующий флаг для надежности
-os.environ["DNNL_VERBOSE"] = "0"  # Убираем лишний шум
+# These flags MUST be set before any other imports (especially Torch/Paddle)
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"  # Allow two copies of OpenMP
+os.environ["FLAGS_use_mkldnn"] = "0"  # Disable MKLDNN in Paddle (conflicts with Torch)
+os.environ["FLAGS_enable_mkldnn"] = "0"  # Redundant flag for safety
+os.environ["DNNL_VERBOSE"] = "0"  # Reduce log noise
 # ---------------------------------------------------------
 
 import uvicorn
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
-# Теперь можно импортировать тяжелые сервисы
+# Heavy services can be imported now
 from backend.services.analysis_service import AnalysisService
 
 # Configure logging
@@ -49,8 +49,8 @@ analysis_service: AnalysisService | None = None
 @app.on_event("startup")
 def startup_event():
     """
-    Инициализация ML моделей при старте сервера.
-    Это занимает время, но позволяет быстро отвечать на запросы.
+    Initialize ML models at server startup.
+    This takes time but makes request handling fast.
     """
     global analysis_service
     logger.info("Initializing ML Models...")
@@ -59,7 +59,7 @@ def startup_event():
         logger.info("✅ ML Models Ready (Audio + Video + OCR).")
     except Exception as e:
         logger.error(f"❌ Failed to initialize ML models: {e}")
-        # Не роняем сервер полностью, чтобы /health работал
+        # Do not crash the whole server so /health keeps working
         analysis_service = None
 
 
@@ -126,7 +126,7 @@ async def analyze_video_endpoint(file: UploadFile = File(...)):
 def main():
     """Start the FastAPI server."""
     logger.info("Starting AI Interview Judge API server...")
-    # workers=1 важно, чтобы модели не грузились в несколько процессов и не съели всю RAM
+    # workers=1 is important so models are not loaded in several processes and do not exhaust RAM
     uvicorn.run(
         "backend.main:app",
         host="0.0.0.0",

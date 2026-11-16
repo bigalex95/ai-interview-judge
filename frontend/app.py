@@ -2,84 +2,84 @@ import streamlit as st
 import requests
 import os
 
-# Получаем адрес API из переменных окружения, по умолчанию для локальной разработки
-# В Docker Compose мы переопределим это на имя сервиса (http://ai-judge-cpu:8000)
+# Read the API address from the environment; defaults to local development
+# In Docker Compose this is overridden with the service name (http://ai-judge-cpu:8000)
 API_URL = os.getenv("API_URL", "http://localhost:8000") + "/analyze"
 
 st.set_page_config(page_title="AI Interview Judge", layout="wide")
 
 st.title("🤖 AI Interview Judge")
-st.markdown("Загрузи видео интервью, и AI оценит ответы кандидата по слайдам.")
+st.markdown("Upload an interview video and the AI will evaluate the candidate's answers against the slides.")
 
-# Сайдбар с информацией
+# Sidebar with information
 with st.sidebar:
-    st.header("О системе")
+    st.header("About")
     st.info(f"Backend URL: `{API_URL}`")
     st.markdown(
         """
-    **Технологии:**
+    **Technologies:**
     - 🗣️ **Whisper** (ASR)
-    - 👁️ **PaddleOCR** (Слайды)
-    - 🧠 **LLM** (Оценка)
+    - 👁️ **PaddleOCR** (Slides)
+    - 🧠 **LLM** (Evaluation)
     """
     )
 
-uploaded_file = st.file_uploader("Выберите видео (MP4)", type=["mp4"])
+uploaded_file = st.file_uploader("Select a video (MP4)", type=["mp4"])
 
 if uploaded_file is not None:
-    # Отображаем видео
+    # Show the video
     st.video(uploaded_file)
 
-    if st.button("🚀 Запустить анализ", type="primary"):
+    if st.button("🚀 Run analysis", type="primary"):
         with st.spinner(
-            "Анализируем видео... Это может занять время (Audio + OCR + LLM)"
+            "Analyzing video... This may take a while (Audio + OCR + LLM)"
         ):
             try:
-                # Отправляем файл на бэкенд
+                # Send the file to the backend
                 files = {"file": (uploaded_file.name, uploaded_file, "video/mp4")}
 
-                # Увеличиваем таймаут, так как анализ видео может быть долгим
+                # Increase the timeout because video analysis can take long
                 response = requests.post(API_URL, files=files, timeout=300)
 
                 if response.status_code == 200:
                     result = response.json()
 
-                    # --- Блок результатов ---
+                    # --- Results block ---
                     evaluation = result.get("ai_evaluation", {})
 
-                    # 1. Метрики
+                    # 1. Metrics
                     col1, col2, col3 = st.columns(3)
                     score = evaluation.get("interview_score", 0)
 
                     with col1:
-                        st.metric("Общая оценка", f"{score}/10")
+                        st.metric("Overall score", f"{score}/10")
 
-                    # Цветное сообщение в зависимости от оценки
+                    # Colored message depending on the score
                     if score >= 8:
-                        st.success(f"🌟 Отличный результат!")
+                        st.success(f"🌟 Excellent result!")
                     elif score >= 5:
-                        st.warning(f"😐 Средний результат")
+                        st.warning(f"😐 Average result")
                     else:
-                        st.error(f"💀 Слабый результат")
+                        st.error(f"💀 Weak result")
 
-                    st.info(f"**Резюме:** {evaluation.get('summary', 'Нет описания')}")
+                    st.info(f"**Summary:** {evaluation.get('summary', 'No description')}")
 
                     st.divider()
 
-                    # 2. Детальный разбор (Аккордеон)
-                    st.subheader("📝 Детальный разбор вопросов")
+                    # 2. Detailed breakdown (accordion)
+                    st.subheader("📝 Detailed question breakdown")
 
                     qa_pairs = evaluation.get("qa_pairs", [])
                     if not qa_pairs:
                         st.warning(
-                            "Вопросы не найдены или структура ответа отличается."
+                            "No questions found, or the response structure differs."
                         )
 
                     for i, qa in enumerate(qa_pairs):
                         verdict = qa.get("verdict", "Unknown")
-                        topic = qa.get("question_topic", f"Вопрос {i+1}")
+                        topic = qa.get("question_topic", f"Question {i+1}")
 
-                        # Выбор иконки
+                        # Pick an icon
                         if verdict == "Correct":
                             icon = "✅"
                         elif verdict == "Wrong":
@@ -89,22 +89,22 @@ if uploaded_file is not None:
 
                         with st.expander(f"{icon} [{verdict}] {topic}"):
                             st.markdown(
-                                f"**📄 Текст со слайда:**\n> {qa.get('slide_text_snippet', 'N/A')}"
+                                f"**📄 Slide text:**\n> {qa.get('slide_text_snippet', 'N/A')}"
                             )
                             st.markdown(
-                                f"**🗣️ Ответ кандидата:**\n> {qa.get('candidate_answer_summary', 'N/A')}"
+                                f"**🗣️ Candidate answer:**\n> {qa.get('candidate_answer_summary', 'N/A')}"
                             )
                             st.markdown(
-                                f"**🤖 Комментарий AI:**\n {qa.get('explanation', '')}"
+                                f"**🤖 AI comment:**\n {qa.get('explanation', '')}"
                             )
 
                 else:
-                    st.error(f"Ошибка API: {response.status_code}")
-                    st.json(response.json())  # Показываем детали ошибки
+                    st.error(f"API error: {response.status_code}")
+                    st.json(response.json())  # Show the error details
 
             except requests.exceptions.ConnectionError:
                 st.error(
-                    f"❌ Не удалось подключиться к бэкенду по адресу `{API_URL}`. Проверь, запущен ли Docker контейнер с API."
+                    f"❌ Could not connect to the backend at `{API_URL}`. Check that the API Docker container is running."
                 )
             except Exception as e:
-                st.error(f"❌ Произошла ошибка: {e}")
+                st.error(f"❌ An error occurred: {e}")

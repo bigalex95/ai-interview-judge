@@ -1,46 +1,38 @@
-# 🎯 Инструкция по запуску AI Interview Judge с Streamlit Frontend
+# Running AI Interview Judge with the Streamlit Frontend
 
-## ✅ Что уже готово:
-
-1. ✅ **Frontend образ собран** (`ai-interview-judge:frontend`)
-2. ✅ **Код фронтенда готов** ([frontend/app.py](frontend/app.py))
-3. ✅ **Docker Compose настроен** с поддержкой CPU и GPU
-4. ✅ **Скрипт быстрого запуска создан** ([start.sh](start.sh))
-
-## 🚀 Варианты запуска:
-
-### Вариант 1: Использовать готовый скрипт (рекомендуется)
+## Option 1: Quick-start script (recommended)
 
 ```bash
-# CPU версия
-./start.sh
+# CPU version
+./scripts/start.sh
 
-# GPU версия
-./start.sh gpu
+# GPU version
+./scripts/start.sh gpu
 ```
 
-### Вариант 2: Запустить вручную через Docker Compose
+## Option 2: Docker Compose
 
-#### CPU версия:
+CPU version:
+
 ```bash
-# Полная сборка и запуск
-docker compose up --build
-
-# Или запустить в фоновом режиме
-docker compose up --build -d
-
-# Проверить логи
-docker compose logs -f
+docker compose up --build        # build and run
+docker compose up --build -d     # run in the background
+docker compose logs -f           # follow logs
 ```
 
-#### GPU версия:
+GPU version:
+
 ```bash
 docker compose --profile gpu up --build
 ```
 
-### Вариант 3: Локальная разработка (без Docker)
+## Option 3: Local development (without Docker)
 
-Если бэкенд уже запущен отдельно:
+Start the backend from the project root, then the frontend in another terminal:
+
+```bash
+uvicorn backend.main:app --reload --port 8000
+```
 
 ```bash
 cd frontend
@@ -48,39 +40,7 @@ pip install streamlit requests watchdog
 streamlit run app.py
 ```
 
-## 🔍 Текущая проблема
-
-При попытке запустить полную систему возникла ошибка сети:
-```
-failed to resolve source metadata for ghcr.io/astral-sh/uv:latest: dial tcp: lookup ghcr.io on 127.0.0.53:53: i/o timeout
-```
-
-### Решения:
-
-1. **Проверьте интернет-соединение:**
-   ```bash
-   ping ghcr.io
-   ```
-
-2. **Используйте альтернативный DNS:**
-   ```bash
-   # Временно установите Google DNS
-   echo "nameserver 8.8.8.8" | sudo tee /etc/resolv.conf
-   ```
-
-3. **Или запустите бэкенд локально** (без Docker):
-   ```bash
-   # В корне проекта
-   uvicorn backend.main:app --reload --port 8000
-   ```
-   
-   Затем в другом терминале:
-   ```bash
-   cd frontend
-   streamlit run app.py
-   ```
-
-## 📊 Архитектура системы
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────┐
@@ -89,86 +49,37 @@ failed to resolve source metadata for ghcr.io/astral-sh/uv:latest: dial tcp: loo
 │                                             │
 │  ┌──────────────────┐  ┌─────────────────┐ │
 │  │   Frontend       │  │   Backend       │ │
-│  │   (Streamlit)    │◄─┤   (FastAPI)     │ │
+│  │   (Streamlit)    │──▶   (FastAPI)     │ │
 │  │   Port: 8501     │  │   Port: 8000    │ │
 │  └──────────────────┘  └─────────────────┘ │
-│           │                     │           │
-└───────────┼─────────────────────┼───────────┘
-            │                     │
-            ▼                     ▼
+└─────────────────────────────────────────────┘
      http://localhost:8501  http://localhost:8000
 ```
 
-## 🎨 Возможности Frontend
+## Troubleshooting
 
-- 📹 Загрузка видео (MP4)
-- 🎥 Предпросмотр видео
-- ⚡ Асинхронный анализ
-- 📊 Визуализация результатов:
-  - Общая оценка (0-10)
-  - Цветовая индикация
-  - AI резюме
-  - Детальный разбор вопросов
-
-## 🐛 Troubleshooting
-
-### Frontend не подключается к Backend
-
-**Симптом:** 
-```
-❌ Не удалось подключиться к бэкенду по адресу http://ai-judge-cpu:8000
-```
-
-**Решение:**
-```bash
-# 1. Проверьте статус контейнеров
-docker compose ps
-
-# 2. Проверьте логи бэкенда
-docker compose logs ai-judge-cpu
-
-# 3. Проверьте healthcheck
-docker inspect ai-judge-cpu | grep -A 10 Health
-
-# 4. Перезапустите бэкенд
-docker compose restart ai-judge-cpu
-```
-
-### Сборка образа зависает
-
-**Решение:**
-```bash
-# Используйте кэш buildkit
-export DOCKER_BUILDKIT=1
-
-# Или очистите все и пересоберите
-docker compose down
-docker system prune -af
-docker compose build --no-cache
-```
-
-## 📝 Следующие шаги
-
-1. **Исправить проблему с сетью** для полной автоматической сборки
-2. **Протестировать фронтенд** с реальным видео
-3. **Добавить примеры** (sample видео для демо)
-4. **Написать E2E тесты**
-
-## 🤝 Полезные команды
+### Frontend cannot connect to the backend
 
 ```bash
-# Просмотр логов
+docker compose ps                                  # container status
+docker compose logs ai-judge-cpu                   # backend logs
+docker inspect ai-judge-cpu | grep -A 10 Health    # healthcheck
+docker compose restart ai-judge-cpu                # restart the backend
+```
+
+### Image build fails with a network error
+
+Example: `failed to resolve source metadata for ghcr.io/astral-sh/uv:latest: dial tcp: lookup ghcr.io ... i/o timeout`.
+
+- Check connectivity: `ping ghcr.io`
+- Try a different DNS server, or run the backend locally (Option 3).
+- If the build hangs: `export DOCKER_BUILDKIT=1`, or rebuild from scratch with `docker compose build --no-cache`.
+
+## Useful commands
+
+```bash
 docker compose logs -f frontend
-docker compose logs -f ai-judge-cpu
-
-# Перезапуск сервисов
 docker compose restart frontend
-docker compose restart ai-judge-cpu
-
-# Остановка
 docker compose down
-
-# Полная очистка
-docker compose down -v
-docker system prune -af
+docker compose down -v          # also remove volumes
 ```

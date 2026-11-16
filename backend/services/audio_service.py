@@ -45,7 +45,7 @@ class AudioService:
                 logger.error(f"Video file has no audio track: {video_path}")
                 raise RuntimeError("Video file has no audio track")
 
-            # Извлекаем аудио (bitrate 128k достаточно для речи)
+            # Extract audio (128k bitrate is enough for speech)
             video.audio.write_audiofile(
                 audio_path, bitrate="128k", verbose=False, logger=None
             )
@@ -83,5 +83,5 @@ class AudioService:
             logger.error(f"Whisper transcription failed: {e}")
             raise RuntimeError("Transcription failed") from e
         finally:
-            # Очистка (опционально, если хотим удалять аудио сразу)
+            # Cleanup (optional, if we want to delete the audio right away)
             pass
