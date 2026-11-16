@@ -52,7 +52,11 @@ docker compose up -d --build ai-judge-cpu frontend
 - API: http://localhost:8000 (interactive docs at `/docs`)
 - Streamlit UI: http://localhost:8501
 
-A GPU variant exists (`docker compose --profile gpu up -d`, service `ai-judge-gpu`).
+GPU variant (needs NVIDIA Container Toolkit); name the services explicitly so the CPU ones are not started too (both sets use ports 8000/8501):
+
+```bash
+docker compose --profile gpu up -d --build ai-judge-gpu frontend-gpu
+```
 
 ### Local build
 
@@ -138,14 +142,14 @@ GitHub Actions (`.github/workflows/ci.yml`) builds the C++ code and runs `ctest`
 
 ## Results
 
-Slide detector throughput on synthetic video (lossless FFV1/AVI, slide change every 60 frames, small moving box), median of 5 runs after one warm-up, single process, CPU only:
+Slide detector throughput on synthetic video (lossless FFV1/AVI, slide change every 60 frames, small moving box), median of 5 runs after one warm-up, single process, CPU only; the table shows the median over 3 invocations with the min-max range in parentheses:
 
 | Resolution | Decode only (frames/s) | `process_video` (frames/s) |
 | ---------- | ---------------------- | -------------------------- |
-| 1280x720   | 816                    | 347                        |
-| 1920x1080  | 375                    | 264                        |
+| 1280x720   | 904 (902-924)          | 502 (502-507)              |
+| 1920x1080  | 427 (426-427)          | 277 (274-279)              |
 
-Hardware: AMD Ryzen 7 5800H (16 threads), g++ 13.4, OpenCV 4.5.4, Release build. Frames wider than 1280 px are downscaled to 1280 px before edge detection. Synthetic lossless video decodes faster than typical H.264 recordings, so real-file throughput will be lower. This measures speed only; there is no accuracy evaluation on real interview recordings yet.
+Hardware: AMD Ryzen 7 5800H (16 threads), g++ 13.4, OpenCV 4.5.4, Release build. Throughput varies with system load: earlier runs on the same machine under load gave roughly 350 fps (720p) and 265 fps (1080p) for `process_video`. Frames wider than 1280 px are downscaled to 1280 px before edge detection. Synthetic lossless video decodes faster than typical H.264 recordings, so real-file throughput will be lower. This measures speed only; there is no accuracy evaluation on real interview recordings yet.
 
 Reproduce:
 
@@ -175,7 +179,6 @@ docs/                Frontend setup, language detection notes, sharing guide
 - Slide detection is edge-map based and tuned by hand: it is meant for screen-share/slide recordings, can fire on large animations or window switches, and has not been evaluated against labelled data.
 - Detector settings in `.env` are not yet wired into the analysis pipeline (see Configuration).
 - The LLM verdicts depend on OCR quality and on Gemini; scores are not calibrated or validated against human graders.
-- Some source comments and the helper scripts/docs are partly in Russian.
 
 ## License
 

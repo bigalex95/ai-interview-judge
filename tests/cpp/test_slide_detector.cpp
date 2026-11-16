@@ -9,6 +9,7 @@
 #include <opencv2/opencv.hpp>
 
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <random>
 #include <string>
@@ -97,10 +98,17 @@ namespace
 
     const cv::Size kSize(640, 360);
 
+// Skips locally when the OpenCV build cannot write FFV1/AVI, but fails when the
+// CI environment variable is set (GitHub Actions sets CI=true) so that a CI run
+// can never be green with every test skipped.
 #define MAKE_VIDEO_OR_SKIP(var, clips, size)                                 \
     TempVideo var(clips, size);                                              \
     if (!var.ok())                                                           \
-        GTEST_SKIP() << "OpenCV build cannot write FFV1/AVI test videos";
+    {                                                                        \
+        if (std::getenv("CI"))                                               \
+            FAIL() << "OpenCV build cannot write FFV1/AVI test videos";      \
+        GTEST_SKIP() << "OpenCV build cannot write FFV1/AVI test videos";    \
+    }
 } // namespace
 
 using ai_interview::SlideDetector;
