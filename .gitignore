@@ -206,7 +206,16 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
+# --- Project-specific ---
+# Local data, uploads and logs
+data/
+temp_uploads/
+temp_audio/
+logs/
 
-data/*
-refactored/*
-temp*
+# C++ / CMake build output (the pybind11 module is built into libs/)
+build*/
+libs/
+CMakeCache.txt
+CMakeFiles/
+compile_commands.json

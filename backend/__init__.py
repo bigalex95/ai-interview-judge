@@ -8,7 +8,6 @@ Modules:
     - main: FastAPI application and API endpoints
     - core: Core functionality and configuration
     - services: Business logic and service layer
-    - test_demo: Command-line demo for slide detection
 
 Author: bigalex95
 Version: 0.1.0

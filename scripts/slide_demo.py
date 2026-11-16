@@ -5,10 +5,10 @@ This script demonstrates the usage of the AI Interview Judge's C++ slide detecti
 It processes a video file to detect slide transitions and saves preview images of detected slides.
 
 Usage:
-    python test_demo.py <path_to_video.mp4>
+    python scripts/slide_demo.py <path_to_video.mp4>
 
 Example:
-    python test_demo.py data/videos/presentation.mp4
+    python scripts/slide_demo.py data/videos/presentation.mp4
 """
 
 import sys
@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Optional, List
 
 # Add project root and libs to Python path
-PROJECT_ROOT = Path(__file__).parent.parent.parent  # Go up to actual project root
+PROJECT_ROOT = Path(__file__).parent.parent  # repo root
 LIBS_PATH = PROJECT_ROOT / "libs"
 sys.path.insert(0, str(PROJECT_ROOT))
 sys.path.insert(0, str(LIBS_PATH))
@@ -142,8 +142,8 @@ def main():
     """
     if len(sys.argv) < 2:
         print("❌ Error: Missing video file argument")
-        print("\nUsage: python test_demo.py <path_to_video.mp4>")
-        print("Example: python test_demo.py data/videos/presentation.mp4")
+        print("\nUsage: python scripts/slide_demo.py <path_to_video.mp4>")
+        print("Example: python scripts/slide_demo.py data/videos/presentation.mp4")
         sys.exit(1)
 
     video_path = sys.argv[1]

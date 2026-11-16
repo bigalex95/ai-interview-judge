@@ -1,25 +1,25 @@
-# Игнорируем Git
+# Git
 .git
 .gitignore
 
-# Игнорируем локальные виртуальные окружения
+# Local virtual environments
 .venv
 venv
 env
 
-# Игнорируем кэш Python
+# Python cache
 __pycache__
 *.pyc
 *.pyo
 *.pyd
 
-# Игнорируем временные файлы и загрузки
+# Temporary files and uploads
 temp_uploads/
 temp_audio/
 output/
 logs/
 
-# Игнорируем локальные артефакты сборки
+# Local build artifacts
 build/
 libs/
 .env
