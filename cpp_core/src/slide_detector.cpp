@@ -1,4 +1,5 @@
 #include "ai_interview/slide_detector.hpp"
+#include <algorithm>
 #include <iostream>
 #include <stdexcept>
 
@@ -62,8 +63,10 @@ namespace ai_interview
             total_change_area += rect.area();
         }
 
-        // Return fraction of changed area (0.0 - 1.0)
-        return total_change_area / frame_area;
+        // Return fraction of changed area (0.0 - 1.0).
+        // Bounding rectangles of separate contours can overlap, so their summed
+        // area may exceed the frame area; clamp to keep the documented range.
+        return std::min(1.0, total_change_area / frame_area);
     }
 
     std::vector<SlideSegment> SlideDetector::process_video(const std::string &video_path)
@@ -150,7 +153,7 @@ namespace ai_interview
 
         cv::Mat frame;
         cap.read(frame);
-        return frame; // Если кадр не считан, вернется пустой Mat, это ок
+        return frame; // If the frame could not be read, an empty Mat is returned (this is fine)
     }
 
 } // namespace ai_interview

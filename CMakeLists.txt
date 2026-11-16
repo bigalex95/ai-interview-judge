@@ -1,19 +1,21 @@
 cmake_minimum_required(VERSION 3.14)
 project(ai_interview_judge VERSION 0.1.0 LANGUAGES CXX)
 
-# Используем стандарт C++17
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Опция: Сборка тестов (по умолчанию выключена, включим когда будем тестить)
-option(BUILD_TESTS "Build tests" OFF)
+# Default to an optimized build; the slide detector is pixel-heavy and a
+# plain (unoptimized) build is an order of magnitude slower.
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
 
-# Находим Python (критично для pybind11)
+option(BUILD_TESTS "Build C++ unit tests (GoogleTest, run with ctest)" OFF)
+option(BUILD_BENCHMARKS "Build the slide detector throughput benchmark" OFF)
+
+# Python is required by pybind11
 find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
 
-# Находим pybind11 (uv add pybind11 не ставит его в систему, 
-# поэтому мы будем использовать FetchContent или подмодуль. 
-# Самый надежный способ для Modern C++ — FetchContent).
 include(FetchContent)
 FetchContent_Declare(
     pybind11
@@ -22,5 +24,14 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(pybind11)
 
-# Добавляем наш C++ модуль (подпапка)
+# C++ core (static library) + Python module
 add_subdirectory(cpp_core)
+
+if(BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests/cpp)
+endif()
+
+if(BUILD_BENCHMARKS)
+    add_subdirectory(benchmarks)
+endif()
