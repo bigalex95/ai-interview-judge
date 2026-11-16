@@ -1,10 +1,10 @@
 #!/bin/bash
 
-# 🚀 Скрипт быстрого запуска AI Interview Judge
+# 🚀 Quick-start script for AI Interview Judge
 
 set -e
 
-# Определяем корневую директорию проекта
+# Determine the project root directory
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
@@ -12,31 +12,31 @@ echo "🤖 AI Interview Judge - Quick Start"
 echo "===================================="
 echo ""
 
-# Определяем режим запуска
+# Determine the launch mode
 MODE=${1:-cpu}
 
 if [ "$MODE" == "gpu" ]; then
-    echo "⚡ Запускаем GPU версию..."
+    echo "⚡ Starting the GPU version..."
     PROFILE="--profile gpu"
     SERVICES="ai-judge-gpu frontend-gpu"
 else
-    echo "💻 Запускаем CPU версию..."
+    echo "💻 Starting the CPU version..."
     PROFILE=""
     SERVICES="ai-judge-cpu frontend"
 fi
 
 echo ""
-echo "📦 Сборка образов..."
+echo "📦 Building images..."
 docker compose $PROFILE build
 
 echo ""
-echo "🚀 Запускаем сервисы..."
+echo "🚀 Starting services..."
 docker compose $PROFILE up -d $SERVICES
 
 echo ""
-echo "⏳ Ожидаем готовности сервисов..."
+echo "⏳ Waiting for services to become ready..."
 
-# Ждем healthcheck бэкенда
+# Wait for the backend healthcheck
 if [ "$MODE" == "gpu" ]; then
     BACKEND="ai-judge-gpu"
 else
@@ -45,7 +45,7 @@ fi
 
 for i in {1..30}; do
     if docker inspect $BACKEND | grep -q '"Status": "healthy"'; then
-        echo "✅ Backend готов!"
+        echo "✅ Backend is ready!"
         break
     fi
     echo -n "."
@@ -53,7 +53,7 @@ for i in {1..30}; do
 done
 
 echo ""
-echo "🎉 Система запущена!"
+echo "🎉 System is up!"
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "🌐 Frontend (Streamlit): http://localhost:8501"
@@ -61,11 +61,11 @@ echo "🔧 Backend API:          http://localhost:8000"
 echo "📚 API Docs:             http://localhost:8000/docs"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "📋 Полезные команды:"
-echo "  docker compose logs -f              # Показать логи всех сервисов"
-echo "  docker compose logs -f frontend     # Логи фронтенда"
-echo "  docker compose logs -f $BACKEND     # Логи бэкенда"
-echo "  docker compose down                 # Остановить все сервисы"
-echo "  docker compose restart frontend     # Перезапустить фронтенд"
+echo "📋 Useful commands:"
+echo "  docker compose logs -f              # Show logs of all services"
+echo "  docker compose logs -f frontend     # Frontend logs"
+echo "  docker compose logs -f $BACKEND     # Backend logs"
+echo "  docker compose down                 # Stop all services"
+echo "  docker compose restart frontend     # Restart the frontend"
 echo ""
-echo "🎯 Откройте браузер: http://localhost:8501"
+echo "🎯 Open in the browser: http://localhost:8501"

@@ -1,38 +1,38 @@
 #!/bin/bash
 
-# 🌩️ Скрипт для публичного sharing через Cloudflare Tunnel
-# Бесплатная альтернатива ngrok без ограничений трафика
+# 🌩️ Script for public sharing via Cloudflare Tunnel
+# A free ngrok alternative with no traffic limits
 
 set -e
 
-# Определяем корневую директорию проекта
+# Determine the project root directory
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 echo "╔════════════════════════════════════════════════════════════════╗"
 echo "║                                                                ║"
-echo "║      🌩️  Cloudflare Tunnel - Бесплатный Public Access        ║"
+echo "║      🌩️  Cloudflare Tunnel - Free Public Access           ║"
 echo "║                                                                ║"
 echo "╚════════════════════════════════════════════════════════════════╝"
 echo ""
 
-# Проверка системы
-echo "🔍 Проверка локальной системы..."
+# System check
+echo "🔍 Checking the local system..."
 if ! curl -sf http://localhost:8501 > /dev/null; then
-    echo "❌ Frontend не запущен на localhost:8501"
-    echo "   Запусти: docker compose up -d"
+    echo "❌ Frontend is not running on localhost:8501"
+    echo "   Run: docker compose up -d"
     exit 1
 fi
 
-echo "✅ Система работает!"
+echo "✅ System is running!"
 echo ""
 
-# Проверка cloudflared
+# Check cloudflared
 if ! command -v cloudflared &> /dev/null; then
     echo "╔════════════════════════════════════════════════════════════════╗"
-    echo "║  📦 cloudflared не установлен                                 ║"
+    echo "║  📦 cloudflared is not installed                             ║"
     echo "╚════════════════════════════════════════════════════════════════╝"
     echo ""
-    echo "Установи cloudflared:"
+    echo "Install cloudflared:"
     echo ""
     echo "  macOS (Homebrew):"
     echo "    brew install cloudflare/cloudflare/cloudflared"
@@ -41,37 +41,37 @@ if ! command -v cloudflared &> /dev/null; then
     echo "    wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb"
     echo "    sudo dpkg -i cloudflared-linux-amd64.deb"
     echo ""
-    echo "  Или скачай с: https://github.com/cloudflare/cloudflared/releases"
+    echo "  Or download from: https://github.com/cloudflare/cloudflared/releases"
     echo ""
     exit 1
 fi
 
-echo "✅ cloudflared установлен!"
+echo "✅ cloudflared is installed!"
 echo ""
 
 echo "╔════════════════════════════════════════════════════════════════╗"
-echo "║  🚀 Запускаем Cloudflare Tunnel...                            ║"
+echo "║  🚀 Starting Cloudflare Tunnel...                             ║"
 echo "╚════════════════════════════════════════════════════════════════╝"
 echo ""
-echo "Преимущества Cloudflare Tunnel:"
-echo "  ✅ Полностью бесплатно"
-echo "  ✅ Без ограничений трафика"
-echo "  ✅ Временный URL (без регистрации)"
-echo "  ✅ HTTPS автоматически"
+echo "Cloudflare Tunnel advantages:"
+echo "  ✅ Completely free"
+echo "  ✅ No traffic limits"
+echo "  ✅ Temporary URL (no sign-up)"
+echo "  ✅ Automatic HTTPS"
 echo ""
-echo "🔗 Получишь URL типа: https://xxx.trycloudflare.com"
+echo "🔗 You will get a URL like: https://xxx.trycloudflare.com"
 echo ""
-echo "💡 Совет: URL будет работать пока терминал открыт."
-echo "   Нажми Ctrl+C чтобы остановить."
+echo "💡 Tip: the URL works while this terminal stays open."
+echo "   Press Ctrl+C to stop."
 echo ""
 
 sleep 2
 
-# Запуск quick tunnel (без конфигурации)
+# Start a quick tunnel (no configuration)
 cloudflared tunnel --url http://localhost:8501
 
-# После остановки
+# After it stops
 echo ""
 echo "╔════════════════════════════════════════════════════════════════╗"
-echo "║  👋 Tunnel остановлен                                         ║"
+echo "║  👋 Tunnel stopped                                            ║"
 echo "╚════════════════════════════════════════════════════════════════╝"

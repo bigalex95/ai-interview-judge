@@ -1,31 +1,17 @@
-# Находим OpenCV
-find_package(OpenCV REQUIRED)
+find_package(OpenCV REQUIRED COMPONENTS core imgproc videoio)
 
-# Собираем список исходников
-file(GLOB_RECURSE SOURCES "src/*.cpp")
-file(GLOB_RECURSE HEADERS "include/*.hpp")
+# Pure C++ library: no Python dependency, so it can be unit-tested and
+# benchmarked on its own.
+add_library(ai_interview_core STATIC src/slide_detector.cpp)
+target_include_directories(ai_interview_core PUBLIC include ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(ai_interview_core PUBLIC ${OpenCV_LIBS})
+set_target_properties(ai_interview_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-# Создаем модуль Python (это магия pybind11)
-# ai_interview_cpp — так будет называться модуль в Python (import ai_interview_cpp)
-pybind11_add_module(ai_interview_cpp
-    ${SOURCES}
-    ${HEADERS}
-)
+# Python extension: `import ai_interview_cpp`
+pybind11_add_module(ai_interview_cpp src/bindings.cpp)
+target_link_libraries(ai_interview_cpp PRIVATE ai_interview_core)
 
-# Подключаем папки с хедерами
-target_include_directories(ai_interview_cpp PRIVATE
-    include
-    ${OpenCV_INCLUDE_DIRS}
-)
-
-# Линкуем библиотеки
-target_link_libraries(ai_interview_cpp PRIVATE
-    ${OpenCV_LIBS}
-)
-
-# Указываем, куда положить скомпилированный файл (.so / .pyd)
-# Положим его прямо в корень backend/services или libs/, чтобы Python его видел
-# Пока положим в корень проекта для теста
+# Put the built .so into <repo>/libs so the backend can import it
 set_target_properties(ai_interview_cpp PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/libs"
 )

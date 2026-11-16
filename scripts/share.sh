@@ -1,10 +1,10 @@
 #!/bin/bash
 
-# 🌍 Скрипт для публичного sharing AI Interview Judge через ngrok
+# 🌍 Script for public sharing of AI Interview Judge via ngrok
 
 set -e
 
-# Определяем корневую директорию проекта
+# Determine the project root directory
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 echo "╔════════════════════════════════════════════════════════════════╗"
@@ -14,33 +14,33 @@ echo "║                                                                ║"
 echo "╚════════════════════════════════════════════════════════════════╝"
 echo ""
 
-# Проверка, запущена ли система
-echo "🔍 Проверка локальной системы..."
+# Check that the system is running
+echo "🔍 Checking the local system..."
 if ! curl -sf http://localhost:8501 > /dev/null; then
-    echo "❌ Frontend не запущен на localhost:8501"
+    echo "❌ Frontend is not running on localhost:8501"
     echo ""
-    echo "Запусти сначала систему:"
+    echo "Start the system first:"
     echo "  docker compose up -d"
-    echo "  или"
+    echo "  or"
     echo "  ./scripts/start.sh"
     echo ""
     exit 1
 fi
 
 if ! curl -sf http://localhost:8000/health > /dev/null; then
-    echo "⚠️  Backend не отвечает (но продолжаем...)"
+    echo "⚠️  Backend is not responding (continuing anyway...)"
 fi
 
-echo "✅ Локальная система работает!"
+echo "✅ Local system is running!"
 echo ""
 
-# Проверка ngrok
+# Check ngrok
 if ! command -v ngrok &> /dev/null; then
     echo "╔════════════════════════════════════════════════════════════════╗"
-    echo "║  📦 ngrok не установлен                                       ║"
+    echo "║  📦 ngrok is not installed                                   ║"
     echo "╚════════════════════════════════════════════════════════════════╝"
     echo ""
-    echo "Установи ngrok:"
+    echo "Install ngrok:"
     echo ""
     echo "  macOS (Homebrew):"
     echo "    brew install ngrok/ngrok/ngrok"
@@ -52,75 +52,75 @@ if ! command -v ngrok &> /dev/null; then
     echo "      sudo tee /etc/apt/sources.list.d/ngrok.list"
     echo "    sudo apt update && sudo apt install ngrok"
     echo ""
-    echo "  Или скачай с: https://ngrok.com/download"
+    echo "  Or download from: https://ngrok.com/download"
     echo ""
-    echo "После установки:"
-    echo "  1. Зарегистрируйся: https://dashboard.ngrok.com/signup"
-    echo "  2. Получи authtoken: https://dashboard.ngrok.com/get-started/your-authtoken"
-    echo "  3. Настрой: ngrok config add-authtoken YOUR_TOKEN"
-    echo "  4. Запусти снова: ./share.sh"
+    echo "After installing:"
+    echo "  1. Sign up: https://dashboard.ngrok.com/signup"
+    echo "  2. Get an authtoken: https://dashboard.ngrok.com/get-started/your-authtoken"
+    echo "  3. Configure: ngrok config add-authtoken YOUR_TOKEN"
+    echo "  4. Run again: ./share.sh"
     echo ""
     exit 1
 fi
 
-# Проверка конфигурации ngrok
+# Check the ngrok configuration
 if ! ngrok config check &> /dev/null; then
-    echo "⚠️  ngrok не настроен"
+    echo "⚠️  ngrok is not configured"
     echo ""
-    echo "Получи authtoken:"
+    echo "Get an authtoken:"
     echo "  https://dashboard.ngrok.com/get-started/your-authtoken"
     echo ""
-    echo "Затем выполни:"
+    echo "Then run:"
     echo "  ngrok config add-authtoken YOUR_TOKEN"
     echo ""
     exit 1
 fi
 
-echo "✅ ngrok установлен и настроен!"
+echo "✅ ngrok is installed and configured!"
 echo ""
 
-# Выбор режима
-echo "📋 Выбери режим sharing:"
+# Mode selection
+echo "📋 Choose a sharing mode:"
 echo ""
-echo "  1) Frontend только (Streamlit UI) - Порт 8501"
-echo "  2) Backend только (FastAPI) - Порт 8000"
-echo "  3) Оба сервиса (требуется ngrok Pro)"
+echo "  1) Frontend only (Streamlit UI) - port 8501"
+echo "  2) Backend only (FastAPI) - port 8000"
+echo "  3) Both services (requires ngrok Pro)"
 echo ""
-read -p "Выбор (1-3) [по умолчанию: 1]: " choice
+read -p "Choice (1-3) [default: 1]: " choice
 choice=${choice:-1}
 
 echo ""
 echo "╔════════════════════════════════════════════════════════════════╗"
-echo "║  🚀 Запускаем публичный туннель...                            ║"
+echo "║  🚀 Starting the public tunnel...                             ║"
 echo "╚════════════════════════════════════════════════════════════════╝"
 echo ""
 
 case $choice in
     1)
-        echo "📱 Запускаем туннель для Frontend (Streamlit)..."
+        echo "📱 Starting a tunnel for the Frontend (Streamlit)..."
         echo ""
-        echo "🔗 После запуска скопируй Forwarding URL и отправь другу!"
+        echo "🔗 After startup, copy the Forwarding URL and share it!"
         echo ""
-        echo "💡 Совет: ngrok будет работать пока этот терминал открыт."
-        echo "   Нажми Ctrl+C чтобы остановить sharing."
+        echo "💡 Tip: ngrok works while this terminal stays open."
+        echo "   Press Ctrl+C to stop sharing."
         echo ""
         sleep 2
         ngrok http 8501
         ;;
     2)
-        echo "🔧 Запускаем туннель для Backend (API)..."
+        echo "🔧 Starting a tunnel for the Backend (API)..."
         echo ""
-        echo "🔗 После запуска скопируй Forwarding URL"
-        echo "   Твой друг сможет использовать API напрямую!"
+        echo "🔗 After startup, copy the Forwarding URL"
+        echo "   Others will be able to use the API directly!"
         echo ""
         sleep 2
         ngrok http 8000
         ;;
     3)
-        echo "🌐 Запускаем туннели для обоих сервисов..."
+        echo "🌐 Starting tunnels for both services..."
         echo ""
         if [ ! -f "ngrok.yml" ]; then
-            echo "⚠️  Создаю конфигурационный файл ngrok.yml..."
+            echo "⚠️  Creating the ngrok.yml config file..."
             cat > ngrok.yml << 'EOF'
 version: "2"
 tunnels:
@@ -133,26 +133,26 @@ tunnels:
     addr: 8000
     inspect: true
 EOF
-            echo "✅ Создан ngrok.yml"
+            echo "✅ Created ngrok.yml"
         fi
         echo ""
-        echo "🔗 Получишь 2 URL - для Frontend и Backend"
+        echo "🔗 You will get 2 URLs - one for the Frontend, one for the Backend"
         echo ""
         sleep 2
         ngrok start --all --config ngrok.yml
         ;;
     *)
-        echo "❌ Неверный выбор"
+        echo "❌ Invalid choice"
         exit 1
         ;;
 esac
 
-# Этот код выполнится после остановки ngrok (Ctrl+C)
+# This runs after ngrok is stopped (Ctrl+C)
 echo ""
 echo "╔════════════════════════════════════════════════════════════════╗"
-echo "║  👋 Sharing остановлен                                        ║"
+echo "║  👋 Sharing stopped                                           ║"
 echo "╚════════════════════════════════════════════════════════════════╝"
 echo ""
-echo "Локальная система все еще работает:"
+echo "The local system is still running:"
 echo "  http://localhost:8501"
 echo ""

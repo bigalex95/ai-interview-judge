@@ -3,7 +3,7 @@ import cv2
 import numpy as np
 import os
 
-# Удаляем глобальный импорт paddleocr, чтобы не грузить либы раньше времени
+# No global paddleocr import, so the libraries are not loaded too early
 # from paddleocr import PaddleOCR
 
 logger = logging.getLogger(__name__)
@@ -70,14 +70,14 @@ class OcrService:
         logger.info(f"Loading PaddleOCR model (lang={paddle_lang})...")
         try:
             # --- LAZY IMPORT (CRITICAL FIX) ---
-            # Импортируем только здесь, чтобы этот код исполнялся ТОЛЬКО в воркере
+            # Import only here so this code runs ONLY in the worker
             from paddleocr import PaddleOCR
 
-            # use_angle_cls=False ускоряет и уменьшает шанс ошибок
+            # use_angle_cls=False speeds things up and reduces the chance of errors
             self.ocr = PaddleOCR(
                 use_angle_cls=False,
                 lang=paddle_lang,
-                show_log=False,  # Убираем шум в консоли
+                show_log=False,  # Suppress console noise
             )
             logger.info(
                 f"PaddleOCR model loaded successfully with language={paddle_lang}."
@@ -101,19 +101,19 @@ class OcrService:
             return ""
 
         try:
-            # Paddle ожидает RGB
+            # Paddle expects RGB
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-            # Инференс
+            # Inference
             result = self.ocr.ocr(frame_rgb, cls=False)
 
             if not result or result[0] is None:
                 return ""
 
-            # Сборка текста
+            # Assemble the text
             extracted_lines = []
 
-            # Обработка разных форматов ответа Paddle
+            # Handle the different Paddle response formats
             lines = result[0]
             if isinstance(lines, list):
                 for line in lines:

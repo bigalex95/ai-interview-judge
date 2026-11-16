@@ -1,0 +1,2 @@
+add_executable(bench_slide_detector bench_slide_detector.cpp)
+target_link_libraries(bench_slide_detector PRIVATE ai_interview_core)

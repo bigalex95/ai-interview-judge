@@ -5,7 +5,7 @@ import google.generativeai as genai
 from typing import Dict, Any, List
 from dotenv import load_dotenv
 
-# Загружаем переменные из .env
+# Load variables from .env
 load_dotenv()
 
 logger = logging.getLogger(__name__)
@@ -21,11 +21,11 @@ class LLMJudgeService:
             self.model = None
             return
 
-        # Настройка Gemini
+        # Configure Gemini
         try:
             genai.configure(api_key=api_key)
 
-            # Используем gemini-1.5-flash — оптимальный баланс скорости и качества
+            # Use gemini-2.5-flash: a good balance of speed and quality
             self.model = genai.GenerativeModel(
                 model_name="gemini-2.5-flash",
                 generation_config={"response_mime_type": "application/json"},
@@ -37,7 +37,7 @@ class LLMJudgeService:
 
     def evaluate_interview(self, analysis_result: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Отправляет собранные данные (аудио-текст + слайды) в LLM для оценки.
+        Send the collected data (audio text + slides) to the LLM for evaluation.
         """
         if not self.model:
             return {"error": "LLM Service not initialized or API key missing"}
@@ -45,7 +45,7 @@ class LLMJudgeService:
         transcript = analysis_result.get("transcription", [])
         slides = analysis_result.get("visual_context", [])
 
-        # Если данных совсем нет, нет смысла спрашивать модель
+        # If there is no data at all, there is no point in querying the model
         if not transcript and not slides:
             return {"error": "No data to evaluate"}
 
@@ -55,7 +55,7 @@ class LLMJudgeService:
             logger.info("🧠 Sending data to Gemini for evaluation...")
             response = self.model.generate_content(prompt)
 
-            # Парсим JSON ответ
+            # Parse the JSON response
             evaluation = json.loads(response.text)
             logger.info("✅ LLM evaluation received successfully.")
             return evaluation
@@ -65,9 +65,9 @@ class LLMJudgeService:
 
     def _construct_prompt(self, transcript: List[Dict], slides: List[Dict]) -> str:
         """
-        Собирает единый промпт из транскрипции и OCR-данных.
+        Build a single prompt from the transcript and OCR data.
         """
-        # Превращаем списки в читаемый текст
+        # Turn the lists into readable text
         transcript_text = "\n".join(
             [f"[{t['start']:.1f}s - {t['end']:.1f}s]: {t['text']}" for t in transcript]
         )

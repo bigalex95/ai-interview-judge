@@ -1,7 +1,7 @@
 [project]
 name = "ai-interview-judge"
 version = "0.1.0"
-description = "Add your description here"
+description = "Video interview analysis: slide detection (C++/OpenCV), speech transcription (Whisper), slide OCR (PaddleOCR) and LLM-based answer evaluation."
 readme = "README.md"
 requires-python = ">=3.10,<3.14"
 dependencies = [
@@ -11,10 +11,10 @@ dependencies = [
     "uvicorn>=0.40.0",
     # --- New ML Dependencies ---
     "faster-whisper>=1.0.0", # ASR (Audio-to-Text) - more efficient than openai-whisper
-    "paddlepaddle>=2.6.0", # Движок для OCR (CPU version)
-    "paddleocr>=2.7.0", # Сам OCR
-    "moviepy>=1.0.3,<2.0.0", # Для работы с аудиодорожками
-    "setuptools>=68.0.0", # Часто нужен для сборки старых пакетов
+    "paddlepaddle>=2.6.0", # OCR engine (CPU version)
+    "paddleocr>=2.7.0", # The OCR library itself
+    "moviepy>=1.0.3,<2.0.0", # For working with audio tracks
+    "setuptools>=68.0.0", # Often needed to build older packages
     "python-multipart>=0.0.21",
     # --- New LLM Dependencies ---
     "google-generativeai>=0.8.3",

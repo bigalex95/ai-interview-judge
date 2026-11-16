@@ -7,7 +7,7 @@ FROM nvidia/cuda:12.1.0-runtime-ubuntu22.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Europe/Moscow
 
-# Устанавливаем Python 3.11 и build tools
+# Install Python 3.11 and build tools
 RUN apt-get update && apt-get install -y \
     software-properties-common \
     && add-apt-repository ppa:deadsnakes/ppa \
@@ -34,11 +34,11 @@ RUN apt-get update && apt-get install -y \
     && ln -sf libopencv_imgproc.so.4.5.4d libopencv_imgproc.so.410 \
     && ln -sf libopencv_imgcodecs.so.4.5.4d libopencv_imgcodecs.so.410
 
-# Устанавливаем Python 3.11 как основной
+# Set Python 3.11 as the default
 RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1 \
     && update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1
 
-# Устанавливаем 'uv' (быстрый менеджер пакетов)
+# Install 'uv' (fast package manager)
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 
 WORKDIR /app
@@ -50,13 +50,13 @@ RUN mkdir build && cd build && \
     cmake .. -DPython3_EXECUTABLE=/usr/bin/python3.11 && \
     make -j$(nproc)
 
-# Копируем файлы зависимостей
+# Copy the dependency files
 COPY pyproject.toml uv.lock ./
 
-# Устанавливаем Python библиотеки (GPU версии)
+# Install Python libraries (GPU versions)
 RUN uv sync --frozen
 
-# Копируем исходный код бэкенда
+# Copy the backend source code
 COPY backend/ ./backend/
 
 # Pre-download ML models during build (so container doesn't need internet at runtime)
@@ -66,12 +66,12 @@ RUN uv run python -c "from faster_whisper import WhisperModel; WhisperModel('bas
 # 2. Download PaddleOCR models (detection + recognition)
 RUN uv run python -c "from paddleocr import PaddleOCR; ocr = PaddleOCR(use_angle_cls=False, lang='en', use_gpu=False, show_log=False)"
 
-# Создаем временные папки
+# Create temporary directories
 RUN mkdir -p temp_uploads temp_audio
 
-# --- Настройка окружения ---
+# --- Environment setup ---
 
-# 1. Решение конфликтов библиотек
+# 1. Resolve library conflicts
 ENV KMP_DUPLICATE_LIB_OK=TRUE
 ENV FLAGS_use_mkldnn=0
 ENV FLAGS_enable_mkldnn=0
@@ -82,14 +82,14 @@ ENV CUDA_VISIBLE_DEVICES=0
 ENV NVIDIA_VISIBLE_DEVICES=all
 ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
 
-# 3. Добавляем путь к нашей C++ либе
+# 3. Add the path to our C++ library
 ENV PYTHONPATH=/app:/app/libs
 
-# 4. Отключаем буферизацию логов
+# 4. Disable log buffering
 ENV PYTHONUNBUFFERED=1
 
-# Открываем порт
+# Expose the port
 EXPOSE 8000
 
-# Запуск сервера через uv run
+# Start the server via uv run
 CMD ["uv", "run", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
