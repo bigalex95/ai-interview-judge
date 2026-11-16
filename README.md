@@ -1,154 +1,182 @@
-# AI-Powered Interview Judge 🧠⚖️
+# AI Interview Judge
 
-An end-to-end multimodal AI system designed to automatically evaluate technical interviews and presentations. The system analyzes video feeds to detect slide transitions, transcribes speech, synchronizes visual context with spoken audio, and uses LLMs to grade the candidate's performance.
+[![CI](https://github.com/bigalex95/ai-interview-judge/actions/workflows/ci.yml/badge.svg)](https://github.com/bigalex95/ai-interview-judge/actions/workflows/ci.yml)
+![C++17](https://img.shields.io/badge/C%2B%2B-17-blue)
+![Python](https://img.shields.io/badge/python-3.10%2B-blue)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-## 🚀 Key Features
+Prototype that grades a recorded technical interview: a C++/OpenCV detector finds the moments when the on-screen slide changes, OCR reads those slides, Whisper transcribes the speech, and Gemini scores the candidate's answers against the slide content. Exposed as a FastAPI service with a small Streamlit UI.
 
-- **High-Performance Video Processing (C++):** A custom C++ engine using OpenCV and robust edge detection (Canny/Morphology) to identify slide transitions and keyframes, filtering out webcam noise
-- **Multimodal Analysis:** Synchronizes visual data (slides) with audio transcripts (Whisper) to understand _what_ is shown vs. _what_ is said
-- **AI Judging:** Uses Large Language Models (LLMs) to evaluate the relevance and accuracy of the speaker's answers based on the visual context
-- **Web Interface:** Beautiful Streamlit frontend for easy video upload and result visualization
-- **Hybrid Architecture:** Implements computationally heavy tasks in C++ bound to a Python backend via `pybind11`
-- **RESTful API:** FastAPI-based backend for easy integration
-- **Docker Ready:** Full containerization with CPU and GPU support
-- **Modular Design:** Clean separation of concerns with service layer architecture
+<!-- TODO: demo GIF (upload a video in the Streamlit UI, show the returned score + Q/A verdicts) -->
 
-## 🛠️ Tech Stack
+## Highlights
 
-- **Core Engine:** C++17, OpenCV 4.x
-- **Bindings:** pybind11
-- **Backend:** Python 3.10+, FastAPI
-- **Frontend:** Streamlit (Web UI)
-- **AI/ML:** OpenAI Whisper (ASR), PaddleOCR, PyTorch, LLMs (OpenAI)
-- **Build System:** CMake, uv, Docker
+- **Slide-change detector in C++17 / OpenCV** (`cpp_core/`): grayscale, Gaussian blur, Canny edges, dilation, then the changed area of the edge map is compared with the *last accepted slide* (not the previous frame). That keeps slow drift and a moving speaker from triggering detections. Exposed to Python through pybind11 as `ai_interview_cpp`.
+- **Unit-tested and benchmarked core**: GoogleTest suite on synthetic videos, run in CI; a small throughput benchmark is included (see [Results](#results)).
+- **Multimodal pipeline**: `faster-whisper` ASR (with language auto-detection), PaddleOCR on the detected slides (language chosen from the detected speech language), Gemini for evaluation.
+- **FastAPI backend + Streamlit frontend**, with CPU and GPU Dockerfiles and a compose file.
 
-## 🏗️ Architecture
-
-The project follows a **Hybrid Monorepo** structure:
+## Architecture
 
 ```mermaid
-graph TD
-    A[Video Input] --> B[Streamlit Frontend];
-    B -->|Upload| C(FastAPI Backend);
-    C -->|Process| D[C++ Core Module];
-    D -->|Slide Detection & Keyframes| C;
-    C -->|Audio Extraction| E[Whisper ASR];
-    E -->|Transcript| C;
-    C -->|OCR| F[PaddleOCR];
-    F -->|Slide Text| C;
-    C -->|Context + Text| G[LLM Judge];
-    G --> H[Results JSON];
-    H --> B;
-    B --> I[Visual Dashboard];
+flowchart LR
+    V[Interview video] --> API[FastAPI /analyze]
+    API --> A[Audio extraction<br/>moviepy] --> W[faster-whisper<br/>transcript + language]
+    API --> D[C++ slide detector<br/>OpenCV, pybind11] --> K[Keyframe indices<br/>and timestamps]
+    K --> O[PaddleOCR<br/>separate process] --> S[Slide text]
+    W --> P[Prompt builder]
+    S --> P
+    P --> G[Gemini 2.5 Flash<br/>JSON mode]
+    G --> R[Score report<br/>score, summary, Q/A verdicts]
 ```
 
-## 📂 Project Structure
+Notes:
 
-```
-ai-interview-judge/
-├── cpp_core/           # C++ Library for video processing
-│   ├── include/        # Headers
-│   └── src/            # Implementation & Bindings
-├── backend/            # FastAPI service & Business Logic
-│   ├── main.py         # API endpoints
-│   ├── core/           # Configuration & logging
-│   └── services/       # AI services (Whisper, OCR, LLM)
-├── frontend/           # Streamlit Web UI
-│   ├── app.py          # Main application
-│   └── Dockerfile      # Frontend container
-├── docs/               # Documentation
-│   ├── QUICKSTART.md   # Quick start guide
-│   ├── SHARING_GUIDE.md # Public sharing guide
-│   └── ...             # Other docs
-├── scripts/            # Utility scripts
-│   ├── share.sh        # Public sharing (ngrok)
-│   ├── start.sh        # Quick start
-│   └── ...             # Other scripts
-├── tests/              # GTest (C++) and Pytest (Python)
-├── docker/             # Backend Dockerfiles (CPU/GPU)
-└── docker-compose.yml  # Full stack orchestration
-```
+- The detector returns frame indices and timestamps; the OCR worker re-reads those frames from the video. The first frame always counts as a slide.
+- PaddleOCR runs in a spawned subprocess because Torch/Paddle OpenMP libraries conflict when loaded in the same process.
+- ASR, detection and OCR failures are logged and the pipeline continues with whatever data is available; if neither transcript nor slide text exists, no LLM call is made.
 
-## 📅 Roadmap
+## Tech stack
 
-- [x] **Sprint 1:** C++ Scene Detection Engine & Python Bindings
-- [x] **Sprint 2:** Multimodal Extraction (OCR + ASR Integration)
-- [x] **Sprint 3:** Logic Core & LLM Evaluation Pipeline
-- [x] **Sprint 4:** MLOps (Docker, CI/CD, API)
-- [x] **Sprint 5:** Streamlit Frontend & Full Stack Integration
+C++17, OpenCV (tested with 4.5.4), pybind11, CMake, GoogleTest; Python 3.10+, FastAPI, faster-whisper, PaddleOCR, moviepy, `google-generativeai` (Gemini), Streamlit, uv, Docker.
 
-## 🚀 Quick Start
+## Getting started
 
-### Using Docker Compose (Recommended)
+### Docker Compose (CPU)
 
 ```bash
-# Clone the repository
-git clone https://github.com/bigalex95/ai-interview-judge.git
-cd ai-interview-judge
-
-# Create .env file with your API keys
-cp .env.example .env
-# Edit .env and add your OPENAI_API_KEY
-
-# Start the system (CPU version)
-docker compose up -d
-
-# Or GPU version (requires NVIDIA Docker)
-docker compose --profile gpu up -d
+cp .env.example .env        # then set GEMINI_API_KEY
+docker compose up -d --build ai-judge-cpu frontend
 ```
 
-**Access the application:**
+- API: http://localhost:8000 (interactive docs at `/docs`)
+- Streamlit UI: http://localhost:8501
 
-- 🌐 Frontend (Streamlit): http://localhost:8501
-- 🔧 Backend API: http://localhost:8000
-- 📚 API Documentation: http://localhost:8000/docs
+A GPU variant exists (`docker compose --profile gpu up -d`, service `ai-judge-gpu`).
 
-### Manual Setup
+### Local build
 
-See detailed instructions in [docs/FRONTEND_SETUP.md](docs/FRONTEND_SETUP.md)
-
-## 🌍 Share with Others
-
-Want to show your project to friends or recruiters?
+Prerequisites: CMake >= 3.14, a C++17 compiler, OpenCV dev package (`libopencv-dev`), Python dev headers, [uv](https://docs.astral.sh/uv/), ffmpeg (for audio extraction). pybind11 is fetched by CMake.
 
 ```bash
-# Quick sharing via ngrok
-./scripts/share.sh
+# 1. Build the C++ extension (writes libs/ai_interview_cpp*.so)
+./scripts/build.sh              # or: cmake -S . -B build && cmake --build build -j
 
-# Or use Cloudflare Tunnel (free, no limits)
-./scripts/share-cloudflare.sh
+# 2. Install Python dependencies and run the API
+uv sync
+uv run uvicorn backend.main:app --port 8000
 ```
 
-See [docs/SHARING_GUIDE.md](docs/SHARING_GUIDE.md) for detailed instructions on public deployment options.
+## API usage
 
-## 📖 Documentation
-
-- [Quick Start Guide](docs/QUICKSTART.md) - Get started in 5 minutes
-- [Sharing Guide](docs/SHARING_GUIDE.md) - Share your project publicly
-- [Frontend Setup Guide](docs/FRONTEND_SETUP.md) - Detailed Streamlit setup
-- [Sprint 5 Summary](docs/SPRINT_5_COMPLETE.md) - What was implemented
-- [Developer Guide](docs/DEVELOPER.md) - For contributors
-- [Quick Reference](docs/QUICK_REFERENCE.md) - Common commands
-
-## 📦 Build & Run
-
-### Prerequisites
-
-- CMake >= 3.10
-- C++ Compiler (GCC/Clang/MSVC)
-- Python >= 3.10
-- OpenCV 4.x
-- Docker & Docker Compose (for containerized deployment)
-
-### Quick Test
+| Method | Path       | Description                                                                 |
+| ------ | ---------- | --------------------------------------------------------------------------- |
+| GET    | `/`        | Service info and whether the ML models loaded                               |
+| GET    | `/health`  | `healthy`, or `degraded` if the models failed to initialise                 |
+| POST   | `/analyze` | Multipart upload (`file`), runs the full pipeline synchronously, returns JSON |
 
 ```bash
-# Upload a video through the web interface
-# Or use curl to test the API directly:
-curl -X POST "http://localhost:8000/analyze" \
-  -F "file=@your_video.mp4"
+curl -X POST http://localhost:8000/analyze -F "file=@interview.mp4"
 ```
 
----
+Response shape (values elided):
 
-_Author: [bigalex95](https://www.google.com/search?q=https://github.com/bigalex95)_
+```json
+{
+  "meta": { "video_path": "...", "status": "completed", "detected_language": "en" },
+  "transcription": [ { "start": 0.0, "end": 4.2, "text": "..." } ],
+  "visual_context": [ { "timestamp": 12.4, "frame_index": 372, "ocr_text": "..." } ],
+  "ai_evaluation": {
+    "interview_score": 0,
+    "summary": "...",
+    "qa_pairs": [
+      {
+        "question_topic": "...",
+        "slide_text_snippet": "...",
+        "candidate_answer_summary": "...",
+        "verdict": "Correct | Partial | Wrong | Unknown",
+        "explanation": "..."
+      }
+    ]
+  }
+}
+```
+
+`interview_score` is an integer from 1 to 10 requested in the prompt. Without `GEMINI_API_KEY`, `ai_evaluation` is `{"error": "..."}`.
+
+## Configuration
+
+Environment variables (see `.env.example`; names only):
+
+- `GEMINI_API_KEY` - required for the LLM scoring step
+- `DEBUG`, `LOG_LEVEL`
+- `MIN_SCENE_DURATION`, `MIN_AREA_RATIO` - slide detector defaults in `backend/core/config.py`
+- `API_HOST`, `API_PORT`, `API_WORKERS`
+- `API_URL` - used by the Streamlit frontend to find the backend
+
+Known gap: `AnalysisService` currently constructs the detector with fixed values (2.0 s, 0.15) and does not read `MIN_SCENE_DURATION` / `MIN_AREA_RATIO`. Detector parameters:
+
+- `min_scene_duration_sec` - minimum time between two detected slides (debounce)
+- `min_area_ratio` - fraction of the frame whose edge map must change to count as a new slide
+
+## Tests and CI
+
+```bash
+# C++ unit tests (GoogleTest, fetched by CMake)
+cmake -S . -B build -DBUILD_TESTS=ON
+cmake --build build -j
+ctest --test-dir build --output-on-failure
+
+# Python tests (language-code mapping, OCR worker signature)
+uv sync && uv run pytest tests/python
+# CI installs only the imported packages instead; see .github/workflows/ci.yml
+```
+
+The C++ suite renders short synthetic "presentations" to lossless video files and checks: identical frames yield one segment, a slide change is detected at the right frame, A-B-A switches give three segments, `min_scene_duration` delays detection, a ~1% change is ignored at the default threshold but detected at a lower one, thresholds of 0 and 1, 1080p input (downscale path), `get_frame`, and error handling for missing files.
+
+GitHub Actions (`.github/workflows/ci.yml`) builds the C++ code and runs `ctest`, and runs the Python tests with a reduced dependency set (no PaddleOCR/Torch). CI does not run the full ASR/OCR/Gemini pipeline or build the Docker images.
+
+## Results
+
+Slide detector throughput on synthetic video (lossless FFV1/AVI, slide change every 60 frames, small moving box), median of 5 runs after one warm-up, single process, CPU only:
+
+| Resolution | Decode only (frames/s) | `process_video` (frames/s) |
+| ---------- | ---------------------- | -------------------------- |
+| 1280x720   | 816                    | 347                        |
+| 1920x1080  | 375                    | 264                        |
+
+Hardware: AMD Ryzen 7 5800H (16 threads), g++ 13.4, OpenCV 4.5.4, Release build. Frames wider than 1280 px are downscaled to 1280 px before edge detection. Synthetic lossless video decodes faster than typical H.264 recordings, so real-file throughput will be lower. This measures speed only; there is no accuracy evaluation on real interview recordings yet.
+
+Reproduce:
+
+```bash
+cmake -S . -B build -DBUILD_BENCHMARKS=ON
+cmake --build build --target bench_slide_detector -j
+./build/benchmarks/bench_slide_detector 1280 720 300 5   # width height frames runs
+```
+
+## Project structure
+
+```
+cpp_core/            C++ slide detector (static lib) + pybind11 bindings
+benchmarks/          Slide detector throughput benchmark
+backend/             FastAPI app, config, services (audio, video, OCR, LLM, orchestration)
+frontend/            Streamlit UI
+tests/cpp/           GoogleTest unit tests
+tests/python/        pytest tests
+docker/, docker-compose.yml           Container setup
+scripts/             Build/run helpers; slide_demo.py is a CLI demo of the detector
+docs/                Frontend setup, language detection notes, sharing guide
+```
+
+## Limitations and status
+
+- Working prototype, not production software. Analysis is synchronous (one upload blocks until Whisper, OCR and Gemini finish); there is no queue, auth or rate limiting.
+- Slide detection is edge-map based and tuned by hand: it is meant for screen-share/slide recordings, can fire on large animations or window switches, and has not been evaluated against labelled data.
+- Detector settings in `.env` are not yet wired into the analysis pipeline (see Configuration).
+- The LLM verdicts depend on OCR quality and on Gemini; scores are not calibrated or validated against human graders.
+- Some source comments and the helper scripts/docs are partly in Russian.
+
+## License
+
+MIT, see [LICENSE](LICENSE).
